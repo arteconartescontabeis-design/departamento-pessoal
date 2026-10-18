@@ -20,7 +20,8 @@ Portal (schema `core`) e a IA Central. Nenhum dado mudou de lugar na migração.
   (funções `cct_consultar_agora`, `cct_pedir_analise_agora`, `cct_vigia`, `cct_vigia_robo`) com o
   `GITHUB_DISPATCH_TOKEN` guardado no Vault do Supabase.
 - **Secrets deste repositório** (Settings → Secrets and variables → Actions; valores digitados só no GitHub):
-  `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `MAIL_API_KEY`, `IA_GATEWAY_TOKEN` e, só em teste, `MAIL_DESTINO_UNICO`.
+  `SUPABASE_SERVICE_KEY`, `MAIL_API_KEY`, `IA_GATEWAY_TOKEN` e, só em teste, `MAIL_DESTINO_UNICO`.
+  (`SUPABASE_URL` já vem no workflow — é o endereço público do banco; um secret com esse nome, se existir, prevalece.)
 - **Nunca dois robôs ao mesmo tempo.** Até a virada o agendamento fica comentado no `monitor-cct.yml` e o robô
   continua rodando no repositório antigo `rescisoes`. Antes da virada, use aqui só o disparo manual com
   `teste_email` (testa os secrets sem consultar nada).
