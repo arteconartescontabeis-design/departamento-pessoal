@@ -51,7 +51,7 @@ jobs:
       - name: Abrir execucao (registro independente do robo)
         id: abrir
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://fbxelwhdiisfmnwrerbl.supabase.co' }}   # endereço público do banco do DP (não é senha)
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           ID=$(curl -sS -X POST "$SUPABASE_URL/rest/v1/rpc/cct_execucao_iniciar" \
@@ -64,7 +64,7 @@ jobs:
         working-directory: robo
         env:
           EXECUCAO_ID: ${{ steps.abrir.outputs.execucao_id }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://fbxelwhdiisfmnwrerbl.supabase.co' }}   # endereço público do banco do DP (não é senha)
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           TENANT_CNPJ: "79876769000128"
           MAIL_API_KEY: ${{ secrets.MAIL_API_KEY }}
@@ -82,7 +82,7 @@ jobs:
       - name: Encerrar execucao se o robo nao encerrou (sempre roda)
         if: always() && steps.abrir.outputs.execucao_id != ''
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://fbxelwhdiisfmnwrerbl.supabase.co' }}   # endereço público do banco do DP (não é senha)
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           # so tem efeito se a execucao ainda estiver EM_EXECUCAO (o robo caiu antes de registrar o fim)
