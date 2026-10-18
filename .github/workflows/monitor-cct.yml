@@ -1,11 +1,10 @@
 name: CCT Monitor - consulta diaria
 
 on:
-  # AGENDAMENTO DESLIGADO ATÉ A VIRADA (migração 10/2026): enquanto o robô roda no repositório antigo `rescisoes`,
-  # este não pode rodar sozinho (seriam dois robôs e e-mails em dobro). Na virada, descomentar as 2 linhas abaixo
-  # e desligar o workflow no repositório antigo (Actions → CCT Monitor → Disable workflow).
-  # schedule:
-  #   - cron: "5 * * * *"        # de hora em hora, 24h, todos os dias; o robo so consulta nas horas (e dias uteis) configuradas no app
+  # Virada de 17/10/2026: o robô passou a rodar AQUI. O workflow do repositório antigo `rescisoes` fica DESLIGADO
+  # (Actions → CCT Monitor → Disable workflow) — nunca os dois ligados ao mesmo tempo.
+  schedule:
+    - cron: "5 * * * *"        # de hora em hora, 24h, todos os dias; o robo so consulta nas horas (e dias uteis) configuradas no app
   workflow_dispatch:
     inputs:
       apenas_cnpj:

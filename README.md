@@ -22,9 +22,8 @@ Portal (schema `core`) e a IA Central. Nenhum dado mudou de lugar na migração.
 - **Secrets deste repositório** (Settings → Secrets and variables → Actions; valores digitados só no GitHub):
   `SUPABASE_SERVICE_KEY`, `MAIL_API_KEY`, `IA_GATEWAY_TOKEN` e, só em teste, `MAIL_DESTINO_UNICO`.
   (`SUPABASE_URL` já vem no workflow — é o endereço público do banco; um secret com esse nome, se existir, prevalece.)
-- **Nunca dois robôs ao mesmo tempo.** Até a virada o agendamento fica comentado no `monitor-cct.yml` e o robô
-  continua rodando no repositório antigo `rescisoes`. Antes da virada, use aqui só o disparo manual com
-  `teste_email` (testa os secrets sem consultar nada).
+- **Nunca dois robôs ao mesmo tempo.** Desde a virada (17/10/2026) o robô roda aqui, de hora em hora; o workflow do
+  repositório antigo `rescisoes` fica desligado (Actions → CCT Monitor → Disable workflow).
 
 ## Migração (outubro/2026)
 Origem: repositório `rescisoes` (commit `1917478`). Mudanças em relação à origem:
