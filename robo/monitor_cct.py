@@ -52,6 +52,10 @@ v0.23.0 (13/10/2026): Configurações → "Notificar o gerente do departamento" 
 gerente da empresa/sindicato não recebe e-mail algum — nem escalonamento, nem lembrete, nem o aviso "ainda sem registro" —
 e as ciências que ainda estiverem ESCALONADAS voltam para atrasada (NOTIFICADO; PENDENTE se o responsável nunca foi
 avisado); o responsável continua recebendo o aviso e o lembrete diário, inclusive depois do prazo.
+v0.23.2 (20/10/2026): CHAVE DA CENTRAL DE E-MAIL NO COFRE — a chave antiga (secret MAIL_API_KEY) ficou no histórico público
+de outro repositório; o robô passa a usar a chave própria dele, guardada no cofre do banco (mail_hub_key_cct) e lida com a
+chave de serviço (segredo_servico). O secret do GitHub fica só de reserva até a central parar de aceitá-lo. A mensagem de
+erro de envio não mostra mais o começo e o fim da chave.
 """
 import hashlib
 import json
@@ -70,7 +74,7 @@ import mediador
 from extrair_cct import extrair
 import analisar_cct
 
-VERSAO = "0.23.0"
+VERSAO = "0.23.2"
 # v0.20.0: token do CCT na IA Central (ia-gateway do Portal Artecon)
 def ia_chave_presente():
     return bool((os.environ.get("IA_GATEWAY_TOKEN") or "").strip())
@@ -93,7 +97,8 @@ SO_ANALISE = (os.environ.get("SO_ANALISE") or "").lower() in ("1", "true", "sim"
 INTERVALO = float(os.environ.get("INTERVALO_S", "8"))
 # Hub artecon-mail — mesmo contrato da Edge Function bright-task do Rescisões Pro
 MAIL_URL = os.environ.get("MAIL_HUB_URL", "https://tjnqloycikukvvnconqn.supabase.co/functions/v1/mail-send")
-MAIL_KEY = (os.environ.get("MAIL_API_KEY") or "").strip() or None
+MAIL_KEY = None          # v0.23.2: lida sob demanda por chave_email() (cofre do banco; o secret do GitHub é só reserva)
+MAIL_KEY_ORIGEM = ""
 MAIL_DESTINO_UNICO = (os.environ.get("MAIL_DESTINO_UNICO") or "").strip().lower()  # modo teste: tudo vai para um endereço
 MAIL_APP = "CCT Monitor"
 BUCKET = "cct-arquivos"
@@ -165,22 +170,45 @@ def sb_upload(path, corpo: bytes, content_type="application/msword"):
 
 
 # ---------------------------------------------------------------- e-mail (hub artecon-mail)
+def chave_email():
+    """v0.23.2: chave própria do robô na central de e-mail (cofre do banco, mail_hub_key_cct), lida com a chave de serviço.
+    O secret MAIL_API_KEY do GitHub (a chave antiga) fica só de reserva até a central parar de aceitá-la."""
+    global MAIL_KEY, MAIL_KEY_ORIGEM
+    if MAIL_KEY:
+        return MAIL_KEY
+    try:
+        r = requests.post(f"{SB_URL}/rest/v1/rpc/segredo_servico", timeout=20,
+                          headers={"apikey": SB_KEY, "Authorization": f"Bearer {SB_KEY}", "Content-Type": "application/json"},
+                          data=json.dumps({"p_nome": "mail_hub_key_cct"}))
+        v = r.json() if r.ok else None
+        if isinstance(v, str) and v.strip():
+            MAIL_KEY, MAIL_KEY_ORIGEM = v.strip(), "cofre"
+            return MAIL_KEY
+    except Exception:
+        pass
+    v = (os.environ.get("MAIL_API_KEY") or "").strip()
+    if v:
+        MAIL_KEY, MAIL_KEY_ORIGEM = v, "secret do GitHub"
+    return MAIL_KEY
+
+
 def enviar_email(dest, assunto, html):
     """Envia via hub, um destinatário por chamada (como a bright-task). Retorna (status, erro, destinatarios_efetivos)."""
     global MAIL_DESTINO_UNICO
     dest = [d for d in dict.fromkeys(x.strip().lower() for x in dest if x) if d]
     if not dest:
         return "NAO_ENVIADA", "nenhum destinatário", []
-    if not MAIL_KEY:
-        return "NAO_ENVIADA", "MAIL_API_KEY não configurada (envio de e-mail ainda não ligado)", dest
-    digital = f"chave enviada: {len(MAIL_KEY)} caracteres, começa '{MAIL_KEY[:3]}' termina '{MAIL_KEY[-3:]}'"
+    chave = chave_email()
+    if not chave:
+        return "NAO_ENVIADA", "chave da central de e-mail indisponível (cofre mail_hub_key_cct e secret MAIL_API_KEY vazios)", dest
+    digital = f"chave do {MAIL_KEY_ORIGEM}, {len(chave)} caracteres"
     efetivos = [MAIL_DESTINO_UNICO] if MAIL_DESTINO_UNICO else dest
     if MAIL_DESTINO_UNICO:
         html = f'<p style="font-size:12px;color:#a93226">[MODO TESTE] destinatários reais: {", ".join(dest)}</p>' + html
     falhas = []
     for d in efetivos:
         try:
-            r = requests.post(MAIL_URL, headers={"Content-Type": "application/json", "x-api-key": MAIL_KEY},
+            r = requests.post(MAIL_URL, headers={"Content-Type": "application/json", "x-api-key": chave},
                               data=json.dumps({"to": d, "assunto": assunto, "html": html, "app": MAIL_APP}), timeout=30)
             if r.status_code >= 300:
                 falhas.append(f"{d}: HTTP {r.status_code} {r.text[:120]}" + (f" [{digital}]" if r.status_code in (401, 403) else ""))
