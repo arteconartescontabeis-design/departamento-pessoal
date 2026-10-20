@@ -20,8 +20,12 @@ Portal (schema `core`) e a IA Central. Nenhum dado mudou de lugar na migração.
   (funções `cct_consultar_agora`, `cct_pedir_analise_agora`, `cct_vigia`, `cct_vigia_robo`) com o
   `GITHUB_DISPATCH_TOKEN` guardado no Vault do Supabase.
 - **Secrets deste repositório** (Settings → Secrets and variables → Actions; valores digitados só no GitHub):
-  `SUPABASE_SERVICE_KEY`, `MAIL_API_KEY`, `IA_GATEWAY_TOKEN` e, só em teste, `MAIL_DESTINO_UNICO`.
+  `SUPABASE_SERVICE_KEY`, `IA_GATEWAY_TOKEN` e, só em teste, `MAIL_DESTINO_UNICO`.
   (`SUPABASE_URL` já vem no workflow — é o endereço público do banco; um secret com esse nome, se existir, prevalece.)
+- **Chave da central de e-mail** (desde a v0.23.2, 20/10/2026): o robô lê do cofre do banco (segredo `mail_hub_key_cct`,
+  pela função `segredo_servico`, só com a chave de serviço). O secret `MAIL_API_KEY` ficou só como reserva e não vale
+  mais (a chave antiga foi desligada na central) — pode ser excluído do GitHub. Para trocar a chave do robô, ver
+  `projetos/artecon-mail/sql/2026-10-20_chaves_por_app.sql` no repositório `artecon-supabase`.
 - **Nunca dois robôs ao mesmo tempo.** Desde a virada (17/10/2026) o robô roda aqui, de hora em hora; o workflow do
   repositório antigo `rescisoes` fica desligado (Actions → CCT Monitor → Disable workflow).
 
