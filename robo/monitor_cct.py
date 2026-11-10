@@ -95,8 +95,8 @@ ORIGEM = os.environ.get("ORIGEM", "github-actions")
 EXECUCAO_ID = (os.environ.get("EXECUCAO_ID") or "").strip()
 SO_ANALISE = (os.environ.get("SO_ANALISE") or "").lower() in ("1", "true", "sim")   # v0.17.1: disparo pelo app — só pareceres pendentes, sem Mediador   # aberta pelo workflow (cct_execucao_iniciar); fechada aqui ou pelo passo "always"
 INTERVALO = float(os.environ.get("INTERVALO_S", "8"))
-# Hub artecon-mail — mesmo contrato da Edge Function bright-task do Rescisões Pro
-MAIL_URL = os.environ.get("MAIL_HUB_URL", "https://tjnqloycikukvvnconqn.supabase.co/functions/v1/mail-send")
+# Hub Artecon Mail (no projeto Gestão desde 10/11/2026) — mesmo contrato da Edge Function bright-task do Rescisões Pro
+MAIL_URL = os.environ.get("MAIL_HUB_URL", "https://vuwgxndahrzinfdlapxz.supabase.co/functions/v1/mail-send")
 MAIL_KEY = None          # v0.23.2: lida sob demanda por chave_email() (cofre do banco; o secret do GitHub é só reserva)
 MAIL_KEY_ORIGEM = ""
 MAIL_DESTINO_UNICO = (os.environ.get("MAIL_DESTINO_UNICO") or "").strip().lower()  # modo teste: tudo vai para um endereço
