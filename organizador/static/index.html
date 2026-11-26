@@ -216,10 +216,17 @@ async function carregarRelatorios(){
   const el = document.getElementById("lista-relatorios");
   if(!lista.length){ el.innerHTML = '<p class="mini">Nenhum relatório ainda.</p>'; }
   else el.innerHTML = "<table><tr><th>#</th><th>Situação</th><th>Criado</th><th>Status</th><th></th></tr>" +
-    lista.map(r => `<tr><td>${r.id}</td><td>${esc(NOMES[r.situacao]||r.situacao)}</td>
+    lista.map(r => {
+      let extra = "";
+      if(["analisando","executando"].includes(r.status))
+        extra = `<button class="botao secundario" style="margin:0 0 0 6px;padding:4px 12px" onclick="parar(${r.id})">⏹ parar</button>`;
+      else if(r.status === "pendente")
+        extra = `<button class="botao secundario" style="margin:0 0 0 6px;padding:4px 12px" onclick="descartar(${r.id})">descartar</button>`;
+      return `<tr><td>${r.id}</td><td>${esc(NOMES[r.situacao]||r.situacao)}</td>
       <td>${esc((r.criado_em||"").replace("T"," "))}</td>
       <td><span class="selo ${esc(r.status)}">${esc(r.status.replaceAll("_"," "))}</span></td>
-      <td><button class="botao secundario" style="margin:0;padding:4px 12px" onclick="abrir(${r.id})">abrir</button></td></tr>`).join("") + "</table>";
+      <td style="white-space:nowrap"><button class="botao secundario" style="margin:0;padding:4px 12px" onclick="abrir(${r.id})">abrir</button>${extra}</td></tr>`;
+    }).join("") + "</table>";
   if(detalheAberto) abrir(detalheAberto, true);
   const ativo = lista.some(r => ["analisando","executando"].includes(r.status));
   clearTimeout(temporizador);
