@@ -52,6 +52,14 @@ class Estado:
         c.row_factory = sqlite3.Row
         return c
 
+    def marcar_interrompidos(self):
+        """Relatórios que ficaram em analisando/executando de uma execução
+        anterior do aplicativo não vão mais andar — marca como erro."""
+        with self._con() as c:
+            c.execute("update relatorios set status='erro', "
+                      "erro='interrompido — o aplicativo foi reiniciado durante a análise/execução' "
+                      "where status in ('analisando','executando')")
+
     def novo_relatorio(self, situacao, params):
         with self._con() as c:
             cur = c.execute(

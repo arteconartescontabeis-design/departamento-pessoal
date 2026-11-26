@@ -89,6 +89,7 @@ def _hash_de(graph, pasta, rel, info):
 
 def analisar_envio(graph, pasta_local, pasta_onedrive, conferir_conteudo=True):
     locais = varrer_local(pasta_local)
+    print(f"[análise] pasta local varrida: {len(locais)} arquivos", flush=True)
     _tipo, destino = classificar(pasta_onedrive)
     if _tipo == "local":
         destino = pasta_onedrive.replace("\\", "/").strip("/")
@@ -146,9 +147,12 @@ def executar_envio_item(graph, item):
 
 def analisar_comparacao(graph, pasta_a, pasta_b, direcao="ambas", conferir_conteudo=True):
     va, _ = varrer_qualquer(graph, pasta_a)
+    print(f"[análise] pasta A varrida: {len(va)} arquivos", flush=True)
     vb, _ = varrer_qualquer(graph, pasta_b)
+    print(f"[análise] pasta B varrida: {len(vb)} arquivos — comparando...", flush=True)
     itens = []
     iguais = 0
+    conferidos = 0
     for rel in sorted(set(va) | set(vb)):
         em_a, em_b = rel in va, rel in vb
         if em_a and not em_b:
@@ -177,6 +181,9 @@ def analisar_comparacao(graph, pasta_a, pasta_b, direcao="ambas", conferir_conte
             if conferir_conteudo:
                 ha = _hash_de(graph, pasta_a, rel, va[rel])
                 hb = _hash_de(graph, pasta_b, rel, vb[rel])
+                conferidos += 1
+                if conferidos % 100 == 0:
+                    print(f"[análise] conteúdo conferido em {conferidos} arquivos...", flush=True)
                 if ha and hb and ha != hb:
                     itens.append({"acao": "atencao", "origem": _spec(pasta_a, rel),
                                   "destino": _spec(pasta_b, rel), "tamanho": ta,

@@ -50,6 +50,7 @@ def carregar_config():
 config = carregar_config()
 app = Flask(__name__)
 db = estado_mod.Estado(PASTA_DADOS / "organizador.sqlite3")
+db.marcar_interrompidos()
 nuvem = graph_mod.Graph(config, PASTA_DADOS)
 
 
