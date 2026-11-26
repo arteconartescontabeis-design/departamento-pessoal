@@ -67,6 +67,7 @@ versionar nem copiar para outra máquina).
 | Pasta local / rede | `F:\Artecon Recibo\RESTORE` |
 | Pasta no OneDrive | `onedrive:/Artecon Recibo/RESTORE` |
 | Pasta sincronizada | `C:\Artecon\DF - one drive\OneDrive - Artecon Artes Contábeis\Sub\Pasta` |
+| Sincronizada lida como disco | `local:C:\...\OneDrive - Artecon Artes Contábeis\Sub\Pasta` (sem login na nuvem) |
 
 O caminho da pasta sincronizada (`...\OneDrive - Artecon Artes Contábeis\...`) é tratado como
 nuvem e consultado pela API — os arquivos somente-nuvem não são baixados para a máquina.

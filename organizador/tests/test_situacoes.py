@@ -59,6 +59,9 @@ def test_classificar_caminhos():
     assert situacoes.classificar(
         "C:\\Artecon\\DF - one drive\\OneDrive - Artecon Artes Contábeis\\"
     ) == ("nuvem", "")
+    assert situacoes.classificar(
+        "local:C:\\Artecon\\DF - one drive\\OneDrive - Artecon Artes Contábeis\\Notas"
+    ) == ("local", "C:\\Artecon\\DF - one drive\\OneDrive - Artecon Artes Contábeis\\Notas")
 
 
 # ---------- comparação entre pastas locais ----------

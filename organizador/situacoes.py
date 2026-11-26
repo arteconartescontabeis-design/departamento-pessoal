@@ -33,6 +33,8 @@ _RE_NOME_MES = (r"(jan(?:eiro)?|fev(?:ereiro)?|mar(?:co)?|abr(?:il)?|mai(?:o)?|j
 def classificar(pasta):
     """-> ('local', caminho) ou ('nuvem', caminho_relativo_no_onedrive)."""
     p = (pasta or "").strip().strip('"')
+    if p.lower().startswith("local:"):
+        return "local", p[len("local:"):].strip()
     if p.lower().startswith("onedrive:"):
         return "nuvem", p[len("onedrive:"):].replace("\\", "/").strip("/")
     m = re.search(r"onedrive - [^\\/]+[\\/](.+)$", p, re.I)
