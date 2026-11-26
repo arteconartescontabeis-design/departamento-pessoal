@@ -8,6 +8,7 @@ Repositório do departamento, um aplicativo por pasta (decisão de 13/10/2026). 
 | `rescisoes/` | **Rescisões** e **Férias** (Rescisões Pro — o mesmo app) | `/departamento-pessoal/rescisoes/` |
 | `cct/` | **Convenções Coletivas** (CCT Monitor) | `/departamento-pessoal/cct/` |
 | `robo/` | Robô do CCT (GitHub Actions `monitor-cct.yml`) | — |
+| `organizador/` | Organizador de Documentos (aplicativo **local**, roda no APP01 — fora do Portal) | — |
 | `sql/` | Scripts de instalação do CCT (histórico) | — |
 | `tests/` | `pytest tests/` (regras do robô) · `node tests/test_cct_app.js` (regras do app) | — |
 | `banco/` | Scripts de virada e de volta (Portal e repositório do robô) | — |

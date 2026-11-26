@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Organizador de Documentos — Artecon</title>
+<style>
+  :root { --azul:#1a4f8b; --fundo:#f4f6f9; --borda:#d8dee7; --ok:#1d7a3a; --erro:#b3261e; --aviso:#9a6700; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 "Segoe UI", system-ui, sans-serif; background:var(--fundo); color:#1c2430; }
+  header { background:var(--azul); color:#fff; padding:14px 22px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  header h1 { margin:0; font-size:19px; font-weight:600; }
+  main { max-width:1080px; margin:0 auto; padding:18px 22px 60px; }
+  .cartao { background:#fff; border:1px solid var(--borda); border-radius:10px; padding:18px 20px; margin:14px 0; }
+  .abas { display:flex; gap:6px; margin-top:18px; flex-wrap:wrap; }
+  .abas button { border:1px solid var(--borda); background:#fff; padding:9px 16px; border-radius:8px 8px 0 0; cursor:pointer; font-size:15px; }
+  .abas button.ativa { background:var(--azul); color:#fff; border-color:var(--azul); font-weight:600; }
+  label { display:block; margin:10px 0 3px; font-weight:600; font-size:13.5px; }
+  input[type=text], input[type=number], select { width:100%; padding:8px 10px; border:1px solid var(--borda); border-radius:6px; font-size:14px; }
+  .linha { display:flex; gap:14px; flex-wrap:wrap; } .linha > div { flex:1; min-width:240px; }
+  .botao { background:var(--azul); color:#fff; border:0; padding:10px 18px; border-radius:7px; font-size:15px; cursor:pointer; margin-top:14px; }
+  .botao.secundario { background:#fff; color:var(--azul); border:1px solid var(--azul); }
+  .botao.aprovar { background:var(--ok); }
+  .botao:disabled { opacity:.55; cursor:default; }
+  .selo { display:inline-block; padding:2px 10px; border-radius:20px; font-size:12.5px; font-weight:600; }
+  .selo.pendente { background:#fff3cd; color:var(--aviso); }
+  .selo.analisando, .selo.executando { background:#dbe7ff; color:var(--azul); }
+  .selo.executado { background:#d9f2e0; color:var(--ok); }
+  .selo.executado_com_erros, .selo.erro { background:#fde0de; color:var(--erro); }
+  .selo.descartado { background:#e6e8ec; color:#555; }
+  table { border-collapse:collapse; width:100%; margin-top:10px; font-size:13.5px; }
+  th, td { border-bottom:1px solid var(--borda); padding:6px 8px; text-align:left; vertical-align:top; word-break:break-all; }
+  th { background:#eef1f6; }
+  th:first-child, td:first-child, td:last-child { word-break:normal; white-space:nowrap; }
+  .mini { color:#5a6676; font-size:13px; }
+  .aviso-login { background:#fff8e1; border:1px solid #ffe29a; border-radius:8px; padding:12px 16px; }
+  .codigo { font:600 22px/1 Consolas, monospace; letter-spacing:2px; background:#fff; border:1px dashed var(--aviso); padding:8px 14px; border-radius:6px; display:inline-block; margin:6px 0; }
+  .resumo { display:flex; gap:10px; flex-wrap:wrap; margin:8px 0; }
+  .resumo span { background:#eef1f6; border-radius:6px; padding:4px 10px; font-size:13px; }
+  #mensagem { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#1c2430; color:#fff; padding:10px 20px; border-radius:8px; display:none; max-width:90%; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Organizador de Documentos — Departamento Pessoal</h1>
+  <div id="usuario" class="mini" style="color:#dce6f5"></div>
+</header>
+<main>
+  <div id="login" class="aviso-login" style="display:none"></div>
+
+  <div class="abas">
+    <button data-aba="envio" class="ativa">1 · Envio ao OneDrive</button>
+    <button data-aba="comparacao">2 · Comparação de pastas</button>
+    <button data-aba="notas">3 · Notas por ano/mês</button>
+    <button data-aba="relatorios">Relatórios e aprovações</button>
+  </div>
+
+  <section id="aba-envio" class="cartao">
+    <p class="mini">Confere o que está na pasta local e <b>ainda não chegou</b> ao OneDrive. A análise não envia
+    nada: ela gera um relatório, e o envio só acontece depois da sua aprovação. Depois de enviar, cada arquivo é
+    conferido na nuvem (tamanho e hash).</p>
+    <div class="linha">
+      <div><label>Pasta local (origem)</label><input type="text" id="envio-local"></div>
+      <div><label>Pasta no OneDrive (destino)</label><input type="text" id="envio-nuvem"></div>
+    </div>
+    <label style="font-weight:400"><input type="checkbox" id="envio-conteudo" checked>
+      Conferir também o conteúdo (hash) dos arquivos que já existem nos dois lados</label>
+    <button class="botao" onclick="analisar('envio')">Analisar (só leitura)</button>
+  </section>
+
+  <section id="aba-comparacao" class="cartao" style="display:none">
+    <p class="mini">Compara dois grupos de pastas (locais, do OneDrive, ou um de cada) e mapeia o que existe em uma
+    e falta na outra — <b>sem baixar os arquivos da nuvem</b>. Depois do relatório aprovado, copia os faltantes.
+    Para pasta na nuvem, escreva <code>onedrive:/Caminho/Da/Pasta</code> ou cole o caminho da pasta sincronizada
+    (<code>...\OneDrive - Artecon Artes Contábeis\...</code>).</p>
+    <div class="linha">
+      <div><label>Pasta A</label><input type="text" id="comp-a"></div>
+      <div><label>Pasta B</label><input type="text" id="comp-b"></div>
+    </div>
+    <div class="linha">
+      <div><label>O que copiar depois da aprovação</label>
+        <select id="comp-direcao">
+          <option value="ambas">Completar as duas (A→B e B→A)</option>
+          <option value="a_para_b">Só o que falta em B (A→B)</option>
+          <option value="b_para_a">Só o que falta em A (B→A)</option>
+        </select></div>
+      <div><label style="font-weight:400; margin-top:28px"><input type="checkbox" id="comp-conteudo" checked>
+        Conferir conteúdo (hash) quando o arquivo existe nas duas</label></div>
+    </div>
+    <button class="botao" onclick="analisar('comparacao')">Analisar (só leitura)</button>
+  </section>
+
+  <section id="aba-notas" class="cartao" style="display:none">
+    <p class="mini">Confere nota por nota, identifica o período pela <b>pasta</b> em que a nota está (ex.:
+    <code>2023\05 - Maio</code>), separa as dos últimos anos e monta o plano de cópia para o destino por
+    ano/mês. Nota sem período identificável <b>não é movida</b> — entra no relatório como "revisar manualmente".</p>
+    <div class="linha">
+      <div><label>Pasta de origem (onde as notas estão)</label><input type="text" id="notas-origem"></div>
+      <div><label>Pasta de destino (nova organização)</label><input type="text" id="notas-destino"></div>
+    </div>
+    <div class="linha">
+      <div><label>Quantos anos para trás</label><input type="number" id="notas-anos" min="1" max="30" value="6"></div>
+      <div><label>Formato das subpastas de destino</label><input type="text" id="notas-formato" value="{ano}/{mes:02d}">
+        <div class="mini">Ex.: <code>{ano}/{mes:02d}</code> → 2023/05 · <code>{ano}/{mes:02d} - {mes_nome}</code> → 2023/05 - Maio</div></div>
+    </div>
+    <button class="botao" onclick="analisar('notas')">Analisar (só leitura)</button>
+  </section>
+
+  <section id="aba-relatorios" class="cartao" style="display:none">
+    <div style="display:flex; justify-content:space-between; align-items:center">
+      <h2 style="margin:0; font-size:17px">Relatórios</h2>
+      <button class="botao secundario" style="margin:0" onclick="carregarRelatorios()">Atualizar</button>
+    </div>
+    <div id="lista-relatorios"></div>
+    <div id="detalhe"></div>
+  </section>
+</main>
+<div id="mensagem"></div>
+<script>
+const NOMES = {envio:"Envio ao OneDrive", comparacao:"Comparação de pastas", notas:"Notas por ano/mês"};
+const ACOES = {enviar:"enviar ao OneDrive", copiar:"copiar", atencao:"atenção — revisar",
+               manual:"revisar manualmente", informativo:"informativo"};
+let detalheAberto = null, temporizador = null;
+
+function msg(texto, ms=4000){
+  const el = document.getElementById("mensagem");
+  el.textContent = texto; el.style.display = "block";
+  clearTimeout(el._t); el._t = setTimeout(()=> el.style.display="none", ms);
+}
+async function api(caminho, corpo){
+  const r = await fetch(caminho, corpo ? {method:"POST", headers:{"Content-Type":"application/json"},
+                                          body:JSON.stringify(corpo)} : undefined);
+  const dados = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(dados.erro || ("falha: HTTP "+r.status));
+  return dados;
+}
+function esc(t){ const d=document.createElement("div"); d.textContent=t==null?"":String(t); return d.innerHTML; }
+
+document.querySelectorAll(".abas button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".abas button").forEach(x => x.classList.toggle("ativa", x===b));
+  document.querySelectorAll("main > section").forEach(s => s.style.display="none");
+  document.getElementById("aba-"+b.dataset.aba).style.display="";
+  if(b.dataset.aba==="relatorios") carregarRelatorios();
+});
+
+async function carregarConfig(){
+  const c = await api("/api/config");
+  document.getElementById("envio-local").value = c.envio.pasta_local || "";
+  document.getElementById("envio-nuvem").value = c.envio.pasta_onedrive || "";
+  document.getElementById("envio-conteudo").checked = c.envio.conferir_conteudo !== false;
+  document.getElementById("comp-a").value = c.comparacao.pasta_a || "";
+  document.getElementById("comp-b").value = c.comparacao.pasta_b || "";
+  document.getElementById("comp-direcao").value = c.comparacao.direcao || "ambas";
+  document.getElementById("notas-origem").value = c.notas.origem || "";
+  document.getElementById("notas-destino").value = c.notas.destino || "";
+  document.getElementById("notas-anos").value = c.notas.anos || 6;
+  document.getElementById("notas-formato").value = c.notas.formato_destino || "{ano}/{mes:02d}";
+}
+
+async function atualizarLogin(){
+  const el = document.getElementById("login");
+  try{
+    const e = await api("/api/login/estado");
+    if(e.conectado){
+      el.style.display="none";
+      document.getElementById("usuario").textContent = "Conectado: " + (e.usuario || "Microsoft 365");
+      return;
+    }
+    document.getElementById("usuario").textContent = "";
+    el.style.display="";
+    if(e.aguardando){
+      el.innerHTML = `<b>Confirme o login:</b> abra <a href="${esc(e.aguardando.endereco)}" target="_blank">${esc(e.aguardando.endereco)}</a>
+        e digite o código <span class="codigo">${esc(e.aguardando.codigo)}</span>`;
+      setTimeout(atualizarLogin, 3000);
+    } else {
+      el.innerHTML = `<b>Microsoft 365 não conectado.</b> ${e.erro ? esc(e.erro)+" " : ""}
+        <button class="botao" style="margin-top:8px" onclick="iniciarLogin()">Conectar ao OneDrive</button>`;
+    }
+  }catch(err){ el.style.display=""; el.textContent = "Painel sem resposta: " + err.message; }
+}
+async function iniciarLogin(){
+  try{ await api("/api/login/iniciar", {}); atualizarLogin(); }
+  catch(err){ msg(err.message, 8000); }
+}
+
+function parametros(situacao){
+  if(situacao==="envio") return {
+    pasta_local: document.getElementById("envio-local").value.trim(),
+    pasta_onedrive: document.getElementById("envio-nuvem").value.trim(),
+    conferir_conteudo: document.getElementById("envio-conteudo").checked};
+  if(situacao==="comparacao") return {
+    pasta_a: document.getElementById("comp-a").value.trim(),
+    pasta_b: document.getElementById("comp-b").value.trim(),
+    direcao: document.getElementById("comp-direcao").value,
+    conferir_conteudo: document.getElementById("comp-conteudo").checked};
+  return {
+    origem: document.getElementById("notas-origem").value.trim(),
+    destino: document.getElementById("notas-destino").value.trim(),
+    anos: document.getElementById("notas-anos").value,
+    formato_destino: document.getElementById("notas-formato").value.trim()};
+}
+
+async function analisar(situacao){
+  try{
+    const r = await api("/api/analisar", {situacao, params: parametros(situacao)});
+    msg("Análise iniciada — acompanhe na aba Relatórios.");
+    detalheAberto = r.relatorio;
+    document.querySelector('[data-aba="relatorios"]').click();
+  }catch(err){ msg(err.message, 8000); }
+}
+
+async function carregarRelatorios(){
+  const lista = await api("/api/relatorios");
+  const el = document.getElementById("lista-relatorios");
+  if(!lista.length){ el.innerHTML = '<p class="mini">Nenhum relatório ainda.</p>'; }
+  else el.innerHTML = "<table><tr><th>#</th><th>Situação</th><th>Criado</th><th>Status</th><th></th></tr>" +
+    lista.map(r => `<tr><td>${r.id}</td><td>${esc(NOMES[r.situacao]||r.situacao)}</td>
+      <td>${esc((r.criado_em||"").replace("T"," "))}</td>
+      <td><span class="selo ${esc(r.status)}">${esc(r.status.replaceAll("_"," "))}</span></td>
+      <td><button class="botao secundario" style="margin:0;padding:4px 12px" onclick="abrir(${r.id})">abrir</button></td></tr>`).join("") + "</table>";
+  if(detalheAberto) abrir(detalheAberto, true);
+  const ativo = lista.some(r => ["analisando","executando"].includes(r.status));
+  clearTimeout(temporizador);
+  if(ativo) temporizador = setTimeout(carregarRelatorios, 3000);
+}
+
+async function abrir(rid, silencioso){
+  detalheAberto = rid;
+  const r = await api("/api/relatorio/"+rid);
+  const el = document.getElementById("detalhe");
+  let html = `<hr style="border:0;border-top:1px solid var(--borda);margin:18px 0">
+    <h3 style="margin:4px 0">Relatório #${r.id} — ${esc(NOMES[r.situacao]||r.situacao)}
+    <span class="selo ${esc(r.status)}">${esc(r.status.replaceAll("_"," "))}</span></h3>`;
+  if(r.erro) html += `<p style="color:var(--erro)"><b>Erro:</b> ${esc(r.erro)}</p>`;
+  if(r.resumo) html += '<div class="resumo">' + Object.entries(r.resumo)
+      .filter(([k,v]) => typeof v !== "object")
+      .map(([k,v]) => `<span><b>${esc(k.replaceAll("_"," "))}:</b> ${esc(v)}</span>`).join("") + "</div>";
+  if(r.status==="pendente"){
+    const n = r.itens.filter(i => ["enviar","copiar"].includes(i.acao)).length;
+    html += `<p><b>Nada foi alterado ainda.</b> Ao aprovar, o aplicativo executa as ${n} ações planejadas abaixo
+      (somente envios/cópias — nunca apaga nem sobrescreve).</p>
+      <button class="botao aprovar" onclick="aprovar(${r.id}, ${n})">Aprovar e executar (${n})</button>
+      <button class="botao secundario" onclick="descartar(${r.id})">Descartar relatório</button>`;
+  }
+  if(r.itens.length){
+    html += `<table><tr><th>Ação</th><th>Origem</th><th>Destino</th><th>Tam. (bytes)</th><th>Detalhe</th><th>Status</th></tr>` +
+      r.itens.map(i => `<tr><td>${esc(ACOES[i.acao]||i.acao)}</td><td>${esc(i.origem||"")}</td>
+        <td>${esc(i.destino||"")}</td><td>${esc(i.tamanho??"")}</td>
+        <td>${esc(i.detalhe||"")}${i.erro ? ' — <b style="color:var(--erro)">'+esc(i.erro)+"</b>" : ""}</td>
+        <td>${esc(i.status)}</td></tr>`).join("") + "</table>";
+  } else if(r.status==="pendente"){
+    html += "<p>Nenhuma diferença encontrada — não há nada a fazer. Pode descartar o relatório.</p>";
+  }
+  el.innerHTML = html;
+  if(!silencioso) el.scrollIntoView({behavior:"smooth"});
+}
+
+async function aprovar(rid, n){
+  if(!confirm(`Aprovar o relatório #${rid} e executar ${n} ações (envios/cópias)?`)) return;
+  try{ await api(`/api/relatorio/${rid}/aprovar`, {}); msg("Aprovado — executando."); carregarRelatorios(); }
+  catch(err){ msg(err.message, 8000); }
+}
+async function descartar(rid){
+  try{ await api(`/api/relatorio/${rid}/descartar`, {}); msg("Relatório descartado. Nada foi alterado."); carregarRelatorios(); }
+  catch(err){ msg(err.message, 8000); }
+}
+
+carregarConfig(); atualizarLogin(); setInterval(atualizarLogin, 60000);
+</script>
+</body>
+</html>

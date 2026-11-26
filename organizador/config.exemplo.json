@@ -1,0 +1,22 @@
+{
+  "client_id": "COLE-AQUI-O-ID-DO-APLICATIVO-REGISTRADO-NO-ENTRA",
+  "tenant": "artecon.cnt.br",
+  "porta": 8765,
+  "envio": {
+    "pasta_local": "F:\\Artecon Recibo\\RESTORE",
+    "pasta_onedrive": "Artecon Recibo/RESTORE",
+    "conferir_conteudo": true
+  },
+  "comparacao": {
+    "pasta_a": "",
+    "pasta_b": "",
+    "direcao": "ambas",
+    "conferir_conteudo": true
+  },
+  "notas": {
+    "origem": "",
+    "destino": "",
+    "anos": 6,
+    "formato_destino": "{ano}/{mes:02d}"
+  }
+}
