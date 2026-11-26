@@ -168,13 +168,20 @@ class Graph:
             url = dados.get("@odata.nextLink")
         return itens
 
-    def varrer(self, caminho):
+    def varrer(self, caminho, cancelado=None, progresso=None):
         """Todos os arquivos sob a pasta, sem baixar nada:
-        caminho relativo -> {tamanho, hash (QuickXor do servidor), modificado}."""
+        caminho relativo -> {tamanho, hash (QuickXor do servidor), modificado}.
+        `cancelado`: função que levanta exceção quando o usuário manda parar;
+        `progresso`: função que recebe um dict com o andamento."""
         base = (caminho or "").strip("/")
         arquivos = {}
         pilha = [""]
         while pilha:
+            if cancelado:
+                cancelado()
+            if progresso:
+                progresso({"fase": "varrendo o OneDrive", "arquivos": len(arquivos),
+                           "pastas_na_fila": len(pilha)})
             rel = pilha.pop()
             completo = (base + "/" + rel).strip("/")
             for it in self.listar(completo):

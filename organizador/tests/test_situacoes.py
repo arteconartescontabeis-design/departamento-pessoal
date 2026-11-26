@@ -137,6 +137,18 @@ def test_notas_local(tmp_path):
     assert copiar[1].endswith("destino/2026/05/recente.pdf")
 
 
+def test_cancelamento_interrompe_analise(tmp_path):
+    a, b = tmp_path / "a", tmp_path / "b"
+    _criar(a, "x.txt", b"1")
+    b.mkdir()
+
+    def cancelar():
+        raise situacoes.AnaliseCancelada()
+
+    with pytest.raises(situacoes.AnaliseCancelada):
+        situacoes.analisar_comparacao(None, str(a), str(b), cancelado=cancelar)
+
+
 def test_notas_conflito_de_nomes(tmp_path):
     origem, destino = tmp_path / "origem", tmp_path / "destino"
     _criar(origem, "loja1/2024/03/nota.pdf", b"aaa")

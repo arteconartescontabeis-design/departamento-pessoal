@@ -88,6 +88,10 @@ class Estado:
                 "where id=? and status='pendente'", (_agora(), rid))
             return cur.rowcount == 1
 
+    def cancelar_registro(self, rid):
+        with self._con() as c:
+            c.execute("update relatorios set status='cancelado' where id=?", (rid,))
+
     def descartar(self, rid):
         with self._con() as c:
             cur = c.execute(

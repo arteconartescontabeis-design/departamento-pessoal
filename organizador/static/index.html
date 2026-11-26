@@ -27,7 +27,8 @@
   .selo.analisando, .selo.executando { background:#dbe7ff; color:var(--azul); }
   .selo.executado { background:#d9f2e0; color:var(--ok); }
   .selo.executado_com_erros, .selo.erro { background:#fde0de; color:var(--erro); }
-  .selo.descartado { background:#e6e8ec; color:#555; }
+  .selo.descartado, .selo.cancelado { background:#e6e8ec; color:#555; }
+  .andamento { background:#eef4ff; border:1px solid #c6d8f5; border-radius:8px; padding:10px 14px; margin:10px 0; }
   table { border-collapse:collapse; width:100%; margin-top:10px; font-size:13.5px; }
   th, td { border-bottom:1px solid var(--borda); padding:6px 8px; text-align:left; vertical-align:top; word-break:break-all; }
   th { background:#eef1f6; }
@@ -233,6 +234,22 @@ async function abrir(rid, silencioso){
     <h3 style="margin:4px 0">Relatório #${r.id} — ${esc(NOMES[r.situacao]||r.situacao)}
     <span class="selo ${esc(r.status)}">${esc(r.status.replaceAll("_"," "))}</span></h3>`;
   if(r.erro) html += `<p style="color:var(--erro)"><b>Erro:</b> ${esc(r.erro)}</p>`;
+  if(["analisando","executando"].includes(r.status)){
+    const p = r.andamento || {};
+    let texto = p.fase ? esc(p.fase) : "trabalhando...";
+    if(p.arquivos != null) texto += ` — ${p.arquivos} arquivos encontrados`;
+    if(p.pastas_na_fila) texto += ` (${p.pastas_na_fila} subpastas na fila)`;
+    if(p.total){
+      texto += ` — ${p.feitos || 0} de ${p.total}`;
+      if(p.inicio_fase && p.feitos > 0 && p.feitos < p.total){
+        const decorrido = Date.now()/1000 - p.inicio_fase;
+        texto += ` — tempo restante aprox.: ${fmtTempo(decorrido / p.feitos * (p.total - p.feitos))}`;
+      }
+    }
+    html += `<div class="andamento">⏳ ${texto}
+      <button class="botao secundario" style="margin:0 0 0 12px;padding:4px 14px"
+        onclick="parar(${r.id})">⏹ Parar</button></div>`;
+  }
   if(r.resumo) html += '<div class="resumo">' + Object.entries(r.resumo)
       .filter(([k,v]) => typeof v !== "object")
       .map(([k,v]) => `<span><b>${esc(k.replaceAll("_"," "))}:</b> ${esc(v)}</span>`).join("") + "</div>";
@@ -259,6 +276,18 @@ async function abrir(rid, silencioso){
 async function aprovar(rid, n){
   if(!confirm(`Aprovar o relatório #${rid} e executar ${n} ações (envios/cópias)?`)) return;
   try{ await api(`/api/relatorio/${rid}/aprovar`, {}); msg("Aprovado — executando."); carregarRelatorios(); }
+  catch(err){ msg(err.message, 8000); }
+}
+function fmtTempo(segundos){
+  segundos = Math.max(0, Math.round(segundos));
+  const h = Math.floor(segundos/3600), m = Math.floor((segundos%3600)/60), s = segundos%60;
+  if(h) return `${h}h${String(m).padStart(2,"0")}min`;
+  if(m) return `${m}min${String(s).padStart(2,"0")}s`;
+  return `${s}s`;
+}
+async function parar(rid){
+  if(!confirm(`Parar o relatório #${rid}? O que já foi feito fica registrado; nada é desfeito.`)) return;
+  try{ await api(`/api/relatorio/${rid}/parar`, {}); msg("Pedido de parada enviado."); carregarRelatorios(); }
   catch(err){ msg(err.message, 8000); }
 }
 async function descartar(rid){

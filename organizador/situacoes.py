@@ -13,11 +13,16 @@ import os
 import posixpath
 import re
 import shutil
+import time
 import unicodedata
 from datetime import date
 from pathlib import Path
 
 import quickxor
+
+class AnaliseCancelada(Exception):
+    """Interrompida a pedido do usuário, pelo botão Parar do painel."""
+
 
 MESES_NOMES = {1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril", 5: "Maio",
                6: "Junho", 7: "Julho", 8: "Agosto", 9: "Setembro", 10: "Outubro",
@@ -45,6 +50,12 @@ def classificar(pasta):
     return "local", p
 
 
+def _info(progresso, **dados):
+    """Repassa o andamento ao painel (fase, contagens, início da fase)."""
+    if progresso:
+        progresso(dados)
+
+
 def _spec(pasta, rel):
     tipo, caminho = classificar(pasta)
     if tipo == "nuvem":
@@ -52,24 +63,27 @@ def _spec(pasta, rel):
     return str(Path(caminho) / Path(rel.replace("/", os.sep)))
 
 
-def varrer_local(pasta):
+def varrer_local(pasta, cancelado=None, progresso=None):
     base = Path(pasta)
     if not base.is_dir():
         raise ValueError(f"Pasta local não encontrada: {pasta}")
     arquivos = {}
     for raiz, _dirs, nomes in os.walk(base):
+        if cancelado:
+            cancelado()
+        _info(progresso, fase="varrendo a pasta local", arquivos=len(arquivos))
         for nome in nomes:
             p = Path(raiz) / nome
             arquivos[p.relative_to(base).as_posix()] = {"tamanho": p.stat().st_size, "hash": None}
     return arquivos
 
 
-def varrer_qualquer(graph, pasta, vazio_se_faltar=False):
+def varrer_qualquer(graph, pasta, vazio_se_faltar=False, cancelado=None, progresso=None):
     tipo, caminho = classificar(pasta)
     try:
         if tipo == "nuvem":
-            return graph.varrer(caminho), tipo
-        return varrer_local(caminho), tipo
+            return graph.varrer(caminho, cancelado=cancelado, progresso=progresso), tipo
+        return varrer_local(caminho, cancelado=cancelado, progresso=progresso), tipo
     except Exception as e:
         if vazio_se_faltar and "não encontrada" in str(e):
             return {}, tipo
@@ -87,16 +101,23 @@ def _hash_de(graph, pasta, rel, info):
 
 # ---------- situação 1: envio da pasta local ao OneDrive ----------
 
-def analisar_envio(graph, pasta_local, pasta_onedrive, conferir_conteudo=True):
-    locais = varrer_local(pasta_local)
+def analisar_envio(graph, pasta_local, pasta_onedrive, conferir_conteudo=True,
+                   cancelado=None, progresso=None):
+    locais = varrer_local(pasta_local, cancelado=cancelado, progresso=progresso)
     print(f"[análise] pasta local varrida: {len(locais)} arquivos", flush=True)
     _tipo, destino = classificar(pasta_onedrive)
     if _tipo == "local":
         destino = pasta_onedrive.replace("\\", "/").strip("/")
-    nuvem, _ = varrer_qualquer(graph, "onedrive:/" + destino, vazio_se_faltar=True)
+    nuvem, _ = varrer_qualquer(graph, "onedrive:/" + destino, vazio_se_faltar=True,
+                               cancelado=cancelado, progresso=progresso)
 
-    itens, ja_enviados = [], 0
+    pares = sum(1 for r, i in locais.items()
+                if r in nuvem and nuvem[r]["tamanho"] == i["tamanho"]) if conferir_conteudo else 0
+    inicio_fase = time.time()
+    itens, ja_enviados, conferidos = [], 0, 0
     for rel, info in sorted(locais.items()):
+        if cancelado:
+            cancelado()
         origem = str(Path(pasta_local) / Path(rel.replace("/", os.sep)))
         alvo = "onedrive:/" + (destino + "/" + rel).strip("/")
         if rel not in nuvem:
@@ -108,10 +129,17 @@ def analisar_envio(graph, pasta_local, pasta_onedrive, conferir_conteudo=True):
             itens.append({"acao": "atencao", "origem": origem, "destino": alvo,
                           "tamanho": info["tamanho"],
                           "detalhe": f"tamanhos diferem — local {info['tamanho']}, nuvem {n['tamanho']}"})
-        elif conferir_conteudo and n.get("hash") and quickxor.hash_arquivo(origem) != n["hash"]:
-            itens.append({"acao": "atencao", "origem": origem, "destino": alvo,
-                          "tamanho": info["tamanho"],
-                          "detalhe": "mesmo tamanho, conteúdo diferente (hash divergente)"})
+        elif conferir_conteudo and n.get("hash"):
+            conferidos += 1
+            if conferidos % 10 == 0:
+                _info(progresso, fase="conferindo conteúdo (hash)", feitos=conferidos,
+                      total=pares, inicio_fase=inicio_fase)
+            if quickxor.hash_arquivo(origem) != n["hash"]:
+                itens.append({"acao": "atencao", "origem": origem, "destino": alvo,
+                              "tamanho": info["tamanho"],
+                              "detalhe": "mesmo tamanho, conteúdo diferente (hash divergente)"})
+            else:
+                ja_enviados += 1
         else:
             ja_enviados += 1
 
@@ -145,15 +173,23 @@ def executar_envio_item(graph, item):
 
 # ---------- situação 2: comparação entre duas pastas ----------
 
-def analisar_comparacao(graph, pasta_a, pasta_b, direcao="ambas", conferir_conteudo=True):
-    va, _ = varrer_qualquer(graph, pasta_a)
+def analisar_comparacao(graph, pasta_a, pasta_b, direcao="ambas", conferir_conteudo=True,
+                        cancelado=None, progresso=None):
+    _info(progresso, fase="varrendo a pasta A")
+    va, _ = varrer_qualquer(graph, pasta_a, cancelado=cancelado, progresso=progresso)
     print(f"[análise] pasta A varrida: {len(va)} arquivos", flush=True)
-    vb, _ = varrer_qualquer(graph, pasta_b)
+    _info(progresso, fase="varrendo a pasta B")
+    vb, _ = varrer_qualquer(graph, pasta_b, cancelado=cancelado, progresso=progresso)
     print(f"[análise] pasta B varrida: {len(vb)} arquivos — comparando...", flush=True)
+    pares = sum(1 for r, i in va.items()
+                if r in vb and vb[r]["tamanho"] == i["tamanho"]) if conferir_conteudo else 0
+    inicio_fase = time.time()
     itens = []
     iguais = 0
     conferidos = 0
     for rel in sorted(set(va) | set(vb)):
+        if cancelado:
+            cancelado()
         em_a, em_b = rel in va, rel in vb
         if em_a and not em_b:
             if direcao in ("ambas", "a_para_b"):
@@ -182,6 +218,9 @@ def analisar_comparacao(graph, pasta_a, pasta_b, direcao="ambas", conferir_conte
                 ha = _hash_de(graph, pasta_a, rel, va[rel])
                 hb = _hash_de(graph, pasta_b, rel, vb[rel])
                 conferidos += 1
+                if conferidos % 10 == 0:
+                    _info(progresso, fase="conferindo conteúdo (hash)", feitos=conferidos,
+                          total=pares, inicio_fase=inicio_fase)
                 if conferidos % 100 == 0:
                     print(f"[análise] conteúdo conferido em {conferidos} arquivos...", flush=True)
                 if ha and hb and ha != hb:
@@ -271,16 +310,27 @@ def periodo_do_caminho(componentes):
     return None
 
 
-def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", hoje=None):
+def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", hoje=None,
+                   cancelado=None, progresso=None):
     hoje = hoje or date.today()
     corte = (hoje.year - int(anos), hoje.month)
-    arquivos, _ = varrer_qualquer(graph, origem)
-    existentes, _ = varrer_qualquer(graph, destino, vazio_se_faltar=True)
+    _info(progresso, fase="varrendo a pasta de origem")
+    arquivos, _ = varrer_qualquer(graph, origem, cancelado=cancelado, progresso=progresso)
+    _info(progresso, fase="varrendo a pasta de destino")
+    existentes, _ = varrer_qualquer(graph, destino, vazio_se_faltar=True,
+                                    cancelado=cancelado, progresso=progresso)
 
+    inicio_fase = time.time()
     itens = []
-    fora_do_periodo = ja_no_destino = 0
+    fora_do_periodo = ja_no_destino = feitos = 0
     planejados = set()
     for rel, info in sorted(arquivos.items()):
+        if cancelado:
+            cancelado()
+        feitos += 1
+        if feitos % 500 == 0:
+            _info(progresso, fase="classificando as notas", feitos=feitos,
+                  total=len(arquivos), inicio_fase=inicio_fase)
         partes = rel.split("/")
         periodo = periodo_do_caminho(partes[:-1])
         if not periodo:

@@ -6,6 +6,7 @@ botão Aprovar no painel; nada é apagado nem sobrescrito, nunca.
 
 import json
 import threading
+import time
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -77,27 +78,47 @@ def api_login_iniciar():
         return jsonify({"erro": str(e)}), 400
 
 
-def _analise(rid, situacao, params):
+# relatórios em andamento: rid -> threading.Event (pedido de parada) e dict de progresso
+cancelamentos = {}
+andamentos = {}
+
+
+def _analise(rid, situacao, params, evento):
+    def checar():
+        if evento.is_set():
+            raise situacoes.AnaliseCancelada()
+
+    def informar(dados):
+        andamentos[rid] = dados
+
     try:
         if situacao == "envio":
             resumo, itens = situacoes.analisar_envio(
                 nuvem, params["pasta_local"], params["pasta_onedrive"],
-                bool(params.get("conferir_conteudo", True)))
+                bool(params.get("conferir_conteudo", True)),
+                cancelado=checar, progresso=informar)
         elif situacao == "comparacao":
             resumo, itens = situacoes.analisar_comparacao(
                 nuvem, params["pasta_a"], params["pasta_b"],
                 params.get("direcao", "ambas"),
-                bool(params.get("conferir_conteudo", True)))
+                bool(params.get("conferir_conteudo", True)),
+                cancelado=checar, progresso=informar)
         elif situacao == "notas":
             resumo, itens = situacoes.analisar_notas(
                 nuvem, params["origem"], params["destino"],
                 int(params.get("anos", 6)),
-                params.get("formato_destino") or "{ano}/{mes:02d}")
+                params.get("formato_destino") or "{ano}/{mes:02d}",
+                cancelado=checar, progresso=informar)
         else:
             raise ValueError("situação desconhecida: " + situacao)
         db.concluir_analise(rid, resumo, itens)
+    except situacoes.AnaliseCancelada:
+        db.cancelar_registro(rid)
     except Exception as e:
         db.falhar(rid, e)
+    finally:
+        cancelamentos.pop(rid, None)
+        andamentos.pop(rid, None)
 
 
 @app.post("/api/analisar")
@@ -114,16 +135,25 @@ def api_analisar():
     if faltam:
         return jsonify({"erro": "preencha: " + ", ".join(faltam)}), 400
     rid = db.novo_relatorio(situacao, params)
-    threading.Thread(target=_analise, args=(rid, situacao, params), daemon=True).start()
+    evento = threading.Event()
+    cancelamentos[rid] = evento
+    threading.Thread(target=_analise, args=(rid, situacao, params, evento), daemon=True).start()
     return jsonify({"relatorio": rid})
 
 
-def _execucao(rid):
+def _execucao(rid, evento):
     rel = db.obter(rid)
+    plano = [i for i in rel["itens"]
+             if i["status"] == "planejado" and i["acao"] in ("enviar", "copiar")]
     erros = 0
-    for item in rel["itens"]:
-        if item["status"] != "planejado" or item["acao"] not in ("enviar", "copiar"):
-            continue
+    inicio = time.time()
+    cancelada = False
+    for n, item in enumerate(plano):
+        if evento.is_set():
+            cancelada = True
+            break
+        andamentos[rid] = {"fase": "executando as cópias/envios", "feitos": n,
+                           "total": len(plano), "inicio_fase": inicio}
         try:
             if item["acao"] == "enviar":
                 situacoes.executar_envio_item(nuvem, item)
@@ -133,15 +163,36 @@ def _execucao(rid):
         except Exception as e:
             erros += 1
             db.atualizar_item(item["id"], "erro", e)
-    db.concluir_execucao(rid, erros)
+    if cancelada:
+        db.cancelar_registro(rid)
+    else:
+        db.concluir_execucao(rid, erros)
+    cancelamentos.pop(rid, None)
+    andamentos.pop(rid, None)
 
 
 @app.post("/api/relatorio/<int:rid>/aprovar")
 def api_aprovar(rid):
     if not db.aprovar(rid):
         return jsonify({"erro": "este relatório não está pendente de aprovação"}), 409
-    threading.Thread(target=_execucao, args=(rid,), daemon=True).start()
+    evento = threading.Event()
+    cancelamentos[rid] = evento
+    threading.Thread(target=_execucao, args=(rid, evento), daemon=True).start()
     return jsonify({"ok": True})
+
+
+@app.post("/api/relatorio/<int:rid>/parar")
+def api_parar(rid):
+    evento = cancelamentos.get(rid)
+    if evento:
+        evento.set()
+        return jsonify({"ok": True})
+    rel = db.obter(rid)
+    if rel and rel["status"] in ("analisando", "executando"):
+        # órfão de uma execução anterior do aplicativo
+        db.cancelar_registro(rid)
+        return jsonify({"ok": True})
+    return jsonify({"erro": "não há análise ou execução em andamento neste relatório"}), 409
 
 
 @app.post("/api/relatorio/<int:rid>/descartar")
@@ -161,6 +212,7 @@ def api_relatorio(rid):
     rel = db.obter(rid)
     if not rel:
         return jsonify({"erro": "relatório não encontrado"}), 404
+    rel["andamento"] = andamentos.get(rid)
     return jsonify(rel)
 
 
