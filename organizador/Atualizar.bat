@@ -17,7 +17,8 @@ if not defined ZIP (
 )
 
 echo Atualizando com: %ZIP%
-tar -xf "%USERPROFILE%\Downloads\%ZIP%" -C "%~dp0"
+rem o ponto no final evita que a barra invertida final engula a aspa
+tar -xf "%USERPROFILE%\Downloads\%ZIP%" -C "%~dp0."
 if errorlevel 1 (
     echo Falha ao extrair o ZIP.
     pause
