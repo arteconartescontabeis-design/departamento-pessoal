@@ -52,6 +52,15 @@ def classificar(pasta):
     return "local", p
 
 
+def _volume(n):
+    v = float(n or 0)
+    for unidade in ("bytes", "KB", "MB", "GB", "TB"):
+        if v < 1024 or unidade == "TB":
+            break
+        v /= 1024
+    return f"{int(v)} bytes" if unidade == "bytes" else f"{v:.1f} {unidade}"
+
+
 def _info(progresso, **dados):
     """Repassa o andamento ao painel (fase, contagens, início da fase)."""
     if progresso:
@@ -156,6 +165,8 @@ def analisar_envio(graph, pasta_local, pasta_onedrive, conferir_conteudo=True,
         "atencao": sum(1 for i in itens if i["acao"] == "atencao"),
         "somente_na_nuvem": len(somente_nuvem),
         "exemplos_somente_na_nuvem": somente_nuvem[:20],
+        "volume_a_enviar": _volume(sum(i["tamanho"] or 0 for i in itens
+                                       if i["acao"] == "enviar")),
     }
     return resumo, itens
 
@@ -188,6 +199,8 @@ def analisar_envio_varias(graph, pastas_locais, base_onedrive, conferir_conteudo
                          f"{r['ja_enviados_e_conferidos']} já na nuvem")
     resumo = {"pastas_locais": len(pastas), "base_no_onedrive": "/" + base}
     resumo.update(totais)
+    resumo["volume_a_enviar"] = _volume(sum(i["tamanho"] or 0 for i in todos
+                                            if i["acao"] == "enviar"))
     resumo["por_pasta"] = " · ".join(por_pasta)
     return resumo, todos
 
@@ -276,6 +289,8 @@ def analisar_comparacao(graph, pasta_a, pasta_b, direcao="ambas", conferir_conte
         "arquivos_em_a": len(va), "arquivos_em_b": len(vb), "iguais_nas_duas": iguais,
         "faltando_copiar": sum(1 for i in itens if i["acao"] == "copiar"),
         "atencao": sum(1 for i in itens if i["acao"] == "atencao"),
+        "volume_a_copiar": _volume(sum(i["tamanho"] or 0 for i in itens
+                                       if i["acao"] == "copiar")),
     }
     if direcao == "b_para_a" and not va:
         resumo["observacao"] = "a pasta A ainda não existe — será criada na execução"
@@ -597,6 +612,8 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
         "fora_do_periodo": fora_do_periodo,
         "sem_periodo_identificado": sum(1 for i in itens if i["acao"] == "manual"),
         "atencao": sum(1 for i in itens if i["acao"] == "atencao"),
+        "volume_a_copiar": _volume(sum(i["tamanho"] or 0 for i in itens
+                                       if i["acao"] == "copiar")),
     }
     if conferir_arquivo:
         resumo["emissao_lida_dentro_da_nota"] = lidas_na_nota
