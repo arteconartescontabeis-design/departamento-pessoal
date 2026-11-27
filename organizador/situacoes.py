@@ -159,10 +159,12 @@ def analisar_envio(graph, pasta_local, pasta_onedrive, conferir_conteudo=True,
 def executar_envio_item(graph, item):
     hash_local = quickxor.hash_arquivo(item["origem"])
     _tipo, destino = classificar(item["destino"])
-    graph.enviar(item["origem"], destino)
-    meta = graph.metadados(destino)
-    if meta is None:
-        raise RuntimeError("enviado, mas não encontrado na conferência")
+    # a resposta do próprio envio já traz os metadados — evita uma segunda consulta
+    meta = graph.enviar(item["origem"], destino) or {}
+    if meta.get("size") is None:
+        meta = graph.metadados(destino) or {}
+        if not meta:
+            raise RuntimeError("enviado, mas não encontrado na conferência")
     if meta.get("size") != os.path.getsize(item["origem"]):
         raise RuntimeError(f"enviado, mas o tamanho na nuvem ({meta.get('size')}) difere do local")
     hash_nuvem = ((meta.get("file") or {}).get("hashes") or {}).get("quickXorHash")

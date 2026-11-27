@@ -40,6 +40,15 @@ class Graph:
         self._app = None
         self._fluxo = None
         self._usuario = None
+        self._local = threading.local()
+
+    def _sessao(self):
+        """Uma conexão HTTP reaproveitada por thread (evita abrir TLS a cada arquivo)."""
+        s = getattr(self._local, "sessao", None)
+        if s is None:
+            s = requests.Session()
+            self._local.sessao = s
+        return s
 
     # ---------- login ----------
 
@@ -124,7 +133,7 @@ class Graph:
         tempo = kw.pop("timeout", 300)
         r = None
         for _ in range(5):
-            r = requests.request(metodo, url, headers=cab, timeout=tempo, **kw)
+            r = self._sessao().request(metodo, url, headers=cab, timeout=tempo, **kw)
             if r.status_code in (429, 502, 503, 504):
                 try:
                     espera = int(r.headers.get("Retry-After", "3"))
@@ -257,7 +266,7 @@ class Graph:
                 dados = f.read(_PEDACO_ENVIO)
                 cab = {"Content-Range": f"bytes {enviado}-{enviado + len(dados) - 1}/{tamanho}"}
                 for tentativa in range(5):
-                    r = requests.put(url, data=dados, timeout=900, headers=cab)
+                    r = self._sessao().put(url, data=dados, timeout=900, headers=cab)
                     if r.status_code in (429, 502, 503, 504):
                         try:
                             espera = int(r.headers.get("Retry-After", "3"))
