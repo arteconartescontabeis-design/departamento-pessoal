@@ -29,6 +29,6 @@ echo Instalando dependencias...
 pip install -q -r requirements.txt
 
 echo.
-findstr "VERSAO = " app.py
+findstr /C:"VERSAO = " app.py
 echo Atualizado. Use o Ligar.bat para abrir.
 pause
