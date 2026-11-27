@@ -40,13 +40,20 @@ def _agora():
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _preparar(con):
+    # WAL: leituras e escritas convivem sem "database is locked"
+    con.execute("pragma journal_mode=wal")
+    con.execute("pragma busy_timeout=30000")
+    return con
+
+
 class CachePeriodos:
     """Memória das emissões já lidas dentro das notas (arquivo + tamanho +
     data de modificação -> ano/mês). Reanalisar só lê o que é novo ou mudou."""
 
     def __init__(self, arquivo: Path):
         Path(arquivo).parent.mkdir(parents=True, exist_ok=True)
-        self._con = sqlite3.connect(str(arquivo), timeout=60, check_same_thread=False)
+        self._con = _preparar(sqlite3.connect(str(arquivo), timeout=60, check_same_thread=False))
         self._con.execute(
             "create table if not exists periodos_nota("
             "caminho text primary key, tamanho integer, mtime integer, ano integer, mes integer)")
@@ -78,7 +85,7 @@ class Estado:
             c.executescript(_ESQUEMA)
 
     def _con(self):
-        c = sqlite3.connect(self._arquivo, timeout=30)
+        c = _preparar(sqlite3.connect(self._arquivo, timeout=30))
         c.row_factory = sqlite3.Row
         return c
 

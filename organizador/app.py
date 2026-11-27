@@ -16,7 +16,7 @@ import estado as estado_mod
 import graph as graph_mod
 import situacoes
 
-VERSAO = "0.6.1"
+VERSAO = "0.6.2"
 
 AQUI = Path(__file__).resolve().parent
 PASTA_DADOS = AQUI / "dados"
@@ -55,11 +55,11 @@ def carregar_config():
 
 config = carregar_config()
 app = Flask(__name__)
-# marcar_interrompidos só na partida real (dentro do __main__ abaixo):
-# no Windows, os processos de leitura das notas reimportam este módulo,
-# e não podem mexer nos relatórios em andamento
-db = estado_mod.Estado(PASTA_DADOS / "organizador.sqlite3")
-nuvem = graph_mod.Graph(config, PASTA_DADOS)
+# No Windows, os processos que leem as notas reimportam este módulo
+# (como "__mp_main__"): eles não podem abrir o banco nem o login
+_PROCESSO_DE_LEITURA = __name__ == "__mp_main__"
+db = None if _PROCESSO_DE_LEITURA else estado_mod.Estado(PASTA_DADOS / "organizador.sqlite3")
+nuvem = None if _PROCESSO_DE_LEITURA else graph_mod.Graph(config, PASTA_DADOS)
 
 
 @app.get("/")
