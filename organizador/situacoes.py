@@ -446,6 +446,8 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
     _info(progresso, fase="varrendo a pasta de destino")
     existentes, _ = varrer_qualquer(graph, destino, vazio_se_faltar=True,
                                     cancelado=cancelado, progresso=progresso)
+    # o Windows não diferencia maiúsculas: a conferência também não pode
+    existentes_cf = {k.casefold(): v for k, v in existentes.items()}
 
     emissoes = {}
     if conferir_arquivo:
@@ -510,7 +512,7 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
         base_rel = rel_destino
         while True:
             rel_tent = base_rel if vez == 1 else _com_sufixo(base_rel, vez)
-            ja = existentes.get(rel_tent)
+            ja = existentes_cf.get(rel_tent.casefold())
             if ja and ja["tamanho"] != info["tamanho"]:
                 vez += 1
                 continue

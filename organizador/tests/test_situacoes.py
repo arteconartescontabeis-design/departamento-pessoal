@@ -268,6 +268,16 @@ def test_nome_repetido_duplicado_e_renomeado(tmp_path):
     assert destinos[2].endswith("destino/2024/03/nota.pdf")
 
 
+def test_destino_com_grafia_diferente_nao_recopia(tmp_path):
+    origem, destino = tmp_path / "origem", tmp_path / "destino"
+    _criar(origem, "2024/09/SINTEGRA/LMF_ESP.txt", b"conteudo")
+    _criar(destino, "2024/09/Sintegra/LMF_ESP.txt", b"conteudo")  # mesma pasta p/ Windows
+    resumo, itens = situacoes.analisar_notas(
+        None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26))
+    assert resumo["ja_no_destino"] == 1
+    assert resumo["a_copiar"] == 0
+
+
 def test_notas_subpastas_da_empresa_acompanham(tmp_path):
     origem, destino = tmp_path / "origem", tmp_path / "destino"
     # mesma nota (nome igual) na pasta normal e na subpasta Cancelada:
