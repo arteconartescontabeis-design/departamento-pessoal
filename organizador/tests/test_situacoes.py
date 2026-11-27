@@ -177,7 +177,7 @@ def test_data_da_nota_xml(tmp_path):
 def test_notas_conferindo_o_arquivo(tmp_path):
     origem, destino = tmp_path / "origem", tmp_path / "destino"
     destino.mkdir()
-    # pasta diz 2022/07, mas a emissão dentro do XML é 05/2023 -> atenção
+    # pasta diz 2022/07, emissão interna 05/2023 -> a pasta manda; divergência vira auditoria
     _criar(origem, "2022/07/divergente.xml", _XML_NFE.encode())
     # sem período na pasta, mas a nota revela 05/2023 -> copiar para 2023/05
     _criar(origem, "diversos/resgatada.xml", _XML_NFE.encode())
@@ -188,15 +188,17 @@ def test_notas_conferindo_o_arquivo(tmp_path):
         None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26),
         conferir_arquivo=True)
 
-    assert resumo["divergencias_pasta_x_nota"] == 1
+    assert resumo["emissao_divergente_copiada_pela_pasta"] == 1
     assert resumo["emissao_lida_dentro_da_nota"] == 2
-    assert resumo["a_copiar"] == 1
+    assert resumo["a_copiar"] == 2
     assert resumo["sem_periodo_identificado"] == 1
-    copiar = [i for i in itens if i["acao"] == "copiar"][0]
-    assert copiar["destino"].replace("\\", "/").endswith("destino/2023/05/diversos/resgatada.xml")
-    assert "emissão lida na nota" in copiar["detalhe"]
-    atencao = [i for i in itens if i["acao"] == "atencao"][0]
-    assert "07/2022" in atencao["detalhe"] and "05/2023" in atencao["detalhe"]
+    assert resumo["atencao"] == 0
+    por_destino = {i["destino"].replace("\\", "/"): i for i in itens if i["acao"] == "copiar"}
+    divergente = next(v for k, v in por_destino.items() if k.endswith("destino/2022/07/divergente.xml"))
+    assert "05/2023" in divergente["detalhe"] and "pela pasta" in divergente["detalhe"]
+    resgatada = next(v for k, v in por_destino.items()
+                     if k.endswith("destino/2023/05/diversos/resgatada.xml"))
+    assert "emissão lida na nota" in resgatada["detalhe"]
 
 
 def test_arquivo_de_apoio_acompanha_a_pasta(tmp_path):
@@ -208,7 +210,7 @@ def test_arquivo_de_apoio_acompanha_a_pasta(tmp_path):
     resumo, itens = situacoes.analisar_notas(
         None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26),
         conferir_arquivo=True)
-    assert resumo["divergencias_pasta_x_nota"] == 0
+    assert resumo["emissao_divergente_copiada_pela_pasta"] == 0
     assert resumo["arquivos_de_apoio_pela_pasta"] == 1
     assert resumo["a_copiar"] == 1
     item = itens[0]
@@ -243,6 +245,25 @@ def test_notas_conferir_arquivo_exige_origem_local():
     with pytest.raises(ValueError, match="ORIGEM local"):
         situacoes.analisar_notas(None, "onedrive:/Notas", "C:\\destino",
                                  conferir_arquivo=True)
+
+
+def test_nome_repetido_duplicado_e_renomeado(tmp_path):
+    origem, destino = tmp_path / "origem", tmp_path / "destino"
+    destino.mkdir()
+    # mesmo destino (2024/03/nota.pdf) a partir de duas grafias de pasta:
+    # conteúdo idêntico -> um só é copiado; conteúdo diferente -> ganha " (2)"
+    _criar(origem, "2024/03/nota.pdf", b"conteudo igual")
+    _criar(origem, "03-2024/nota.pdf", b"conteudo igual")
+    _criar(origem, "Marco 2024/nota.pdf", b"conteudo DIFERENTE")
+    resumo, itens = situacoes.analisar_notas(
+        None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26))
+    assert resumo["a_copiar"] == 2
+    assert resumo["duplicados_identicos_ignorados"] == 1
+    assert resumo["renomeados_por_nome_repetido"] == 1
+    assert resumo["atencao"] == 0
+    destinos = sorted(i["destino"].replace("\\", "/") for i in itens if i["acao"] == "copiar")
+    assert destinos[0].endswith("destino/2024/03/nota (2).pdf")
+    assert destinos[1].endswith("destino/2024/03/nota.pdf")
 
 
 def test_notas_subpastas_da_empresa_acompanham(tmp_path):

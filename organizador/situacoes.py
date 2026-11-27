@@ -343,6 +343,22 @@ def data_da_nota(caminho):
     return None
 
 
+def _com_sufixo(rel, n):
+    base, ext = posixpath.splitext(rel)
+    return f"{base} ({n}){ext}"
+
+
+def _conteudo_igual(a, b):
+    ta, ca = classificar(a)
+    tb, cb = classificar(b)
+    if ta != "local" or tb != "local":
+        return False
+    try:
+        return quickxor.hash_arquivo(ca) == quickxor.hash_arquivo(cb)
+    except OSError:
+        return False
+
+
 def periodo_do_caminho(componentes):
     """Combina as pastas do caminho, da mais interna para a mais externa
     (ex.: ['2023', '05 - Maio'] -> (2023, 5))."""
@@ -439,8 +455,8 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
     inicio_fase = time.time()
     itens = []
     fora_do_periodo = ja_no_destino = feitos = lidas_na_nota = divergentes = 0
-    apoios_pela_pasta = 0
-    planejados = set()
+    apoios_pela_pasta = duplicados = renomeados = 0
+    planejados = {}
     for rel, info in sorted(arquivos.items()):
         if cancelado:
             cancelado()
@@ -463,14 +479,14 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
         if e_apoio and periodo_pasta:
             periodo_nota = None
             apoios_pela_pasta += 1
+        # a pasta da empresa manda: quando ela indica o período, o arquivo vai
+        # para aquele mês; emissão interna divergente vira auditoria, não bloqueio
+        auditoria = ""
         if periodo_nota and periodo_pasta and periodo_nota != periodo_pasta:
             divergentes += 1
-            itens.append({"acao": "atencao", "origem": spec_origem, "tamanho": info["tamanho"],
-                          "detalhe": f"a pasta indica {periodo_pasta[1]:02d}/{periodo_pasta[0]}, "
-                                     f"mas a emissão dentro da nota é "
-                                     f"{periodo_nota[1]:02d}/{periodo_nota[0]} — revisar"})
-            continue
-        periodo = periodo_nota or periodo_pasta
+            auditoria = (f" (emissão interna {periodo_nota[1]:02d}/{periodo_nota[0]}"
+                         " diverge — copiado pela pasta)")
+        periodo = periodo_pasta or periodo_nota
         if not periodo:
             onde = ("nem dentro da nota nem no caminho" if conferir_arquivo else "no caminho")
             itens.append({"acao": "manual", "origem": spec_origem, "tamanho": info["tamanho"],
@@ -485,29 +501,43 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
         # acompanham o arquivo no destino — nada colide, nada se perde
         extras = [c for c in partes[:-1] if ano_mes_do_texto(c) == (None, None)]
         rel_destino = "/".join([sub.strip("/")] + extras + [partes[-1]])
-        spec_destino = _spec(destino, rel_destino)
-        if rel_destino in existentes:
-            if existentes[rel_destino]["tamanho"] == info["tamanho"]:
-                ja_no_destino += 1
-            else:
-                itens.append({"acao": "atencao", "origem": spec_origem, "destino": spec_destino,
-                              "tamanho": info["tamanho"],
-                              "detalhe": "já existe no destino com tamanho diferente — revisar"})
+        if rel_destino in existentes and existentes[rel_destino]["tamanho"] == info["tamanho"]:
+            ja_no_destino += 1
             continue
-        if rel_destino in planejados:
-            itens.append({"acao": "atencao", "origem": spec_origem, "destino": spec_destino,
+        chave = rel_destino.casefold()
+        plan = planejados.get(chave)
+        if plan and plan[1] == info["tamanho"] and _conteudo_igual(plan[0], spec_origem):
+            duplicados += 1
+            itens.append({"acao": "informativo", "origem": spec_origem,
                           "tamanho": info["tamanho"],
-                          "detalhe": "duas notas de origens diferentes cairiam no mesmo destino — revisar"})
+                          "detalhe": "duplicado idêntico de arquivo já planejado — não é copiado de novo"})
             continue
-        planejados.add(rel_destino)
+        observacao_nome = ""
+        if rel_destino in existentes or plan:
+            n = 2
+            while True:
+                candidato = _com_sufixo(rel_destino, n)
+                if candidato not in existentes and candidato.casefold() not in planejados:
+                    break
+                n += 1
+            observacao_nome = f' — nome repetido: vai como "{posixpath.basename(candidato)}"'
+            rel_destino = candidato
+            chave = rel_destino.casefold()
+            renomeados += 1
+        spec_destino = _spec(destino, rel_destino)
+        planejados[chave] = (spec_origem, info["tamanho"])
         if e_apoio and periodo_pasta:
             base_periodo = "arquivo de apoio — acompanha a pasta"
+        elif periodo_pasta:
+            base_periodo = "pela pasta"
         else:
-            base_periodo = "emissão lida na nota" if periodo_nota else "pela pasta"
+            base_periodo = "emissão lida na nota"
+        detalhe = f"{mes:02d}/{ano}"
+        if conferir_arquivo:
+            detalhe += f" — {base_periodo}"
+        detalhe += auditoria + observacao_nome
         itens.append({"acao": "copiar", "origem": spec_origem, "destino": spec_destino,
-                      "tamanho": info["tamanho"],
-                      "detalhe": f"{mes:02d}/{ano} — {base_periodo}"
-                                 if conferir_arquivo else f"{mes:02d}/{ano}"})
+                      "tamanho": info["tamanho"], "detalhe": detalhe})
 
     resumo = {
         "origem": origem, "destino": destino, "anos": int(anos),
@@ -521,7 +551,11 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
     }
     if conferir_arquivo:
         resumo["emissao_lida_dentro_da_nota"] = lidas_na_nota
-        resumo["divergencias_pasta_x_nota"] = divergentes
+        resumo["emissao_divergente_copiada_pela_pasta"] = divergentes
     if apoios_pela_pasta:
         resumo["arquivos_de_apoio_pela_pasta"] = apoios_pela_pasta
+    if duplicados:
+        resumo["duplicados_identicos_ignorados"] = duplicados
+    if renomeados:
+        resumo["renomeados_por_nome_repetido"] = renomeados
     return resumo, itens
