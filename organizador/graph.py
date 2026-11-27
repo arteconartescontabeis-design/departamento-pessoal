@@ -18,6 +18,8 @@ from urllib.parse import quote
 import msal
 import requests
 
+import caminhos
+
 GRAPH = "https://graph.microsoft.com/v1.0"
 _PEDACO_ENVIO = 32 * 327680  # 10 MiB, múltiplo exigido de 320 KiB
 _LIMITE_ENVIO_SIMPLES = 4 * 1024 * 1024
@@ -241,6 +243,7 @@ class Graph:
 
     def enviar(self, caminho_local, caminho_nuvem):
         destino = caminho_nuvem.strip("/")
+        caminho_local = caminhos.longo(caminho_local)
         tamanho = os.path.getsize(caminho_local)
         if tamanho <= _LIMITE_ENVIO_SIMPLES:
             with open(caminho_local, "rb") as f:
@@ -281,6 +284,7 @@ class Graph:
         return r.json()
 
     def baixar(self, caminho_nuvem, destino_local):
+        destino_local = caminhos.longo(destino_local)
         if os.path.exists(destino_local):
             raise ErroGraph(f"Já existe no destino (nada foi sobrescrito): {destino_local}")
         r = self._req("GET", self._item(caminho_nuvem, "/content"), stream=True)

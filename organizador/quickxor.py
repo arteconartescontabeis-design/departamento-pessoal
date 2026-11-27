@@ -8,6 +8,8 @@ de 11 bits por byte, comprimento XORado nos 8 bytes finais).
 
 import base64
 
+import caminhos
+
 _LARGURA = 160           # bits do vetor circular
 _DESLOC = 11             # bits deslocados a cada byte
 _MASCARA = (1 << _LARGURA) - 1
@@ -60,5 +62,5 @@ def hash_fluxo(f, tam_leitura: int = 160 * 8192) -> str:
 
 
 def hash_arquivo(caminho) -> str:
-    with open(caminho, "rb") as f:
+    with open(caminhos.longo(caminho), "rb") as f:
         return hash_fluxo(f)

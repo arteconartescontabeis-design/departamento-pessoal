@@ -19,6 +19,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
+import caminhos
 import quickxor
 
 class AnaliseCancelada(Exception):
@@ -65,19 +66,19 @@ def _spec(pasta, rel):
 
 
 def varrer_local(pasta, cancelado=None, progresso=None):
-    base = Path(pasta)
-    if not base.is_dir():
+    if not os.path.isdir(caminhos.longo(pasta)):
         raise ValueError(f"Pasta local não encontrada: {pasta}")
+    base = caminhos.longo(pasta)
     arquivos = {}
     for raiz, _dirs, nomes in os.walk(base):
         if cancelado:
             cancelado()
         _info(progresso, fase="varrendo a pasta local", arquivos=len(arquivos))
         for nome in nomes:
-            p = Path(raiz) / nome
-            st = p.stat()
-            arquivos[p.relative_to(base).as_posix()] = {
-                "tamanho": st.st_size, "hash": None, "mtime": int(st.st_mtime)}
+            p = os.path.join(raiz, nome)
+            st = os.stat(p)
+            rel = os.path.relpath(p, base).replace(os.sep, "/")
+            arquivos[rel] = {"tamanho": st.st_size, "hash": None, "mtime": int(st.st_mtime)}
     return arquivos
 
 
@@ -168,7 +169,7 @@ def executar_envio_item(graph, item):
         meta = graph.metadados(destino) or {}
         if not meta:
             raise RuntimeError("enviado, mas não encontrado na conferência")
-    if meta.get("size") != os.path.getsize(item["origem"]):
+    if meta.get("size") != os.path.getsize(caminhos.longo(item["origem"])):
         raise RuntimeError(f"enviado, mas o tamanho na nuvem ({meta.get('size')}) difere do local")
     hash_nuvem = ((meta.get("file") or {}).get("hashes") or {}).get("quickXorHash")
     if hash_nuvem and hash_nuvem != hash_local:
@@ -256,12 +257,13 @@ def copiar_item(graph, origem, destino):
     to, co = classificar(origem)
     td, cd = classificar(destino)
     if to == "local" and td == "local":
-        if os.path.exists(cd):
+        cd_fs = caminhos.longo(cd)
+        if os.path.exists(cd_fs):
             raise RuntimeError(f"já existe no destino (nada foi sobrescrito): {cd}")
-        pasta = os.path.dirname(cd)
+        pasta = os.path.dirname(cd_fs)
         if pasta:
             os.makedirs(pasta, exist_ok=True)
-        shutil.copy2(co, cd)
+        shutil.copy2(caminhos.longo(co), cd_fs)
     elif to == "local" and td == "nuvem":
         graph.enviar(co, cd)
     elif to == "nuvem" and td == "local":
@@ -312,6 +314,7 @@ def data_da_nota(caminho):
     """Lê a data de emissão dentro da própria nota: XML (NF-e, campo dhEmi/dEmi)
     ou PDF com texto (procura a data junto de 'emissão'). -> (ano, mes) ou None."""
     nome = str(caminho).lower()
+    caminho = caminhos.longo(caminho)
     try:
         if nome.endswith(".xml"):
             import xml.etree.ElementTree as ET
