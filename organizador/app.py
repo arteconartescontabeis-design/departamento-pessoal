@@ -16,7 +16,7 @@ import estado as estado_mod
 import graph as graph_mod
 import situacoes
 
-VERSAO = "0.6.0"
+VERSAO = "0.6.1"
 
 AQUI = Path(__file__).resolve().parent
 PASTA_DADOS = AQUI / "dados"
@@ -55,8 +55,10 @@ def carregar_config():
 
 config = carregar_config()
 app = Flask(__name__)
+# marcar_interrompidos só na partida real (dentro do __main__ abaixo):
+# no Windows, os processos de leitura das notas reimportam este módulo,
+# e não podem mexer nos relatórios em andamento
 db = estado_mod.Estado(PASTA_DADOS / "organizador.sqlite3")
-db.marcar_interrompidos()
 nuvem = graph_mod.Graph(config, PASTA_DADOS)
 
 
@@ -244,6 +246,7 @@ def api_relatorio(rid):
 
 
 if __name__ == "__main__":
+    db.marcar_interrompidos()
     porta = int(config.get("porta", 8765))
     print(f"Organizador de Documentos v{VERSAO} — abra http://localhost:{porta}")
     # host 127.0.0.1: o painel só responde na própria máquina

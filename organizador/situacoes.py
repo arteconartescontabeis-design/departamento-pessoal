@@ -15,7 +15,7 @@ import re
 import shutil
 import time
 import unicodedata
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
@@ -325,19 +325,19 @@ def data_da_nota(caminho):
             return None
         if nome.endswith(".pdf"):
             from pypdf import PdfReader
-            texto = ""
-            for pagina in PdfReader(caminho).pages[:2]:
-                texto += (pagina.extract_text() or "") + "\n"
-            t = _normalizar(texto)
-            m = re.search(r"emiss[a-z]*\W{0,60}?([0-3]\d)[/. -]([01]\d)[/. -](20\d{2})", t, re.S)
-            if m and 1 <= int(m.group(2)) <= 12:
-                return int(m.group(3)), int(m.group(2))
-            m = re.search(r"(20\d{2})-(0[1-9]|1[0-2])-[0-3]\d", t)
-            if m:
-                return int(m.group(1)), int(m.group(2))
-            m = re.search(r"\b([0-3]\d)/([01]\d)/(20\d{2})\b", t)
-            if m and 1 <= int(m.group(2)) <= 12:
-                return int(m.group(3)), int(m.group(2))
+            # a emissão quase sempre está na 1ª página: só lê a 2ª se precisar
+            paginas = PdfReader(caminho).pages
+            for pagina in paginas[:2]:
+                t = _normalizar(pagina.extract_text() or "")
+                m = re.search(r"emiss[a-z]*\W{0,60}?([0-3]\d)[/. -]([01]\d)[/. -](20\d{2})", t, re.S)
+                if m and 1 <= int(m.group(2)) <= 12:
+                    return int(m.group(3)), int(m.group(2))
+                m = re.search(r"(20\d{2})-(0[1-9]|1[0-2])-[0-3]\d", t)
+                if m:
+                    return int(m.group(1)), int(m.group(2))
+                m = re.search(r"\b([0-3]\d)/([01]\d)/(20\d{2})\b", t)
+                if m and 1 <= int(m.group(2)) <= 12:
+                    return int(m.group(3)), int(m.group(2))
     except Exception:
         return None
     return None
@@ -374,14 +374,23 @@ def _ler_emissoes(origem, arquivos, cache, paralelo, cancelado, progresso):
         return periodos
     inicio = time.time()
     feitos = 0
+    ja_em_memoria = len(periodos)
     novos = []
 
-    def ler(trio):
-        rel, spec, info = trio
-        return rel, spec, info, data_da_nota(spec)
+    # ler PDF consome processador, não rede: para lotes grandes, processos
+    # (vários núcleos de verdade); para poucos arquivos, threads bastam
+    usar_processos = len(pendentes) > 400
+    trabalhadores = max(1, min(paralelo, (os.cpu_count() or 4) if usar_processos else paralelo))
+    executor_cls = ProcessPoolExecutor if usar_processos else ThreadPoolExecutor
+    opcoes_map = {"chunksize": 32} if usar_processos else {}
+    rotulo = (f"lendo a emissão dentro das notas ({trabalhadores} núcleos"
+              if usar_processos else
+              f"lendo a emissão dentro das notas ({trabalhadores} em paralelo")
+    rotulo += f", {ja_em_memoria} vindas da memória)"
 
-    with ThreadPoolExecutor(max_workers=max(1, paralelo)) as executor:
-        for rel, spec, info, p in executor.map(ler, pendentes):
+    with executor_cls(max_workers=trabalhadores) as executor:
+        resultados = executor.map(data_da_nota, [spec for _, spec, _ in pendentes], **opcoes_map)
+        for (rel, spec, info), p in zip(pendentes, resultados):
             if cancelado:
                 cancelado()
             periodos[rel] = p or "sem"
@@ -389,9 +398,8 @@ def _ler_emissoes(origem, arquivos, cache, paralelo, cancelado, progresso):
                           p[0] if p else 0, p[1] if p else 0))
             feitos += 1
             if feitos % 200 == 0:
-                _info(progresso, fase=f"lendo a emissão dentro das notas ({paralelo} em paralelo"
-                                      f", {len(periodos) - feitos} vindas da memória)",
-                      feitos=feitos, total=len(pendentes), inicio_fase=inicio)
+                _info(progresso, fase=rotulo, feitos=feitos,
+                      total=len(pendentes), inicio_fase=inicio)
             if cache and len(novos) >= 2000:
                 cache.salvar_lote(novos)
                 novos = []
