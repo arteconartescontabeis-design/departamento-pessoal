@@ -193,7 +193,7 @@ def test_notas_conferindo_o_arquivo(tmp_path):
     assert resumo["a_copiar"] == 1
     assert resumo["sem_periodo_identificado"] == 1
     copiar = [i for i in itens if i["acao"] == "copiar"][0]
-    assert copiar["destino"].replace("\\", "/").endswith("destino/2023/05/resgatada.xml")
+    assert copiar["destino"].replace("\\", "/").endswith("destino/2023/05/diversos/resgatada.xml")
     assert "emissão lida na nota" in copiar["detalhe"]
     atencao = [i for i in itens if i["acao"] == "atencao"][0]
     assert "07/2022" in atencao["detalhe"] and "05/2023" in atencao["detalhe"]
@@ -245,11 +245,27 @@ def test_notas_conferir_arquivo_exige_origem_local():
                                  conferir_arquivo=True)
 
 
+def test_notas_subpastas_da_empresa_acompanham(tmp_path):
+    origem, destino = tmp_path / "origem", tmp_path / "destino"
+    # mesma nota (nome igual) na pasta normal e na subpasta Cancelada:
+    # as duas vão, cada uma no seu lugar — sem conflito
+    _criar(origem, "2024/03/nota.xml", b"normal")
+    _criar(origem, "2024/03/Cancelada/nota.xml", b"cancelada")
+    resumo, itens = situacoes.analisar_notas(
+        None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26))
+    assert resumo["a_copiar"] == 2
+    assert resumo["atencao"] == 0
+    destinos = sorted(i["destino"].replace("\\", "/") for i in itens)
+    assert destinos[0].endswith("destino/2024/03/Cancelada/nota.xml")
+    assert destinos[1].endswith("destino/2024/03/nota.xml")
+
+
 def test_notas_conflito_de_nomes(tmp_path):
     origem, destino = tmp_path / "origem", tmp_path / "destino"
     _criar(origem, "loja1/2024/03/nota.pdf", b"aaa")
     _criar(origem, "loja2/2024/03/nota.pdf", b"bbbb")
     resumo, itens = situacoes.analisar_notas(
         None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26))
-    assert resumo["a_copiar"] == 1
-    assert resumo["atencao"] == 1
+    # loja1/loja2 não são período: acompanham o arquivo, sem conflito
+    assert resumo["a_copiar"] == 2
+    assert resumo["atencao"] == 0

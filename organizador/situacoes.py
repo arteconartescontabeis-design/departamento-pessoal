@@ -481,7 +481,10 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
             fora_do_periodo += 1
             continue
         sub = formato.format(ano=ano, mes=mes, mes_nome=MESES_NOMES[mes])
-        rel_destino = sub.strip("/") + "/" + partes[-1]
+        # subpastas que não são período (Cancelada, Inutilizada, nome da loja...)
+        # acompanham o arquivo no destino — nada colide, nada se perde
+        extras = [c for c in partes[:-1] if ano_mes_do_texto(c) == (None, None)]
+        rel_destino = "/".join([sub.strip("/")] + extras + [partes[-1]])
         spec_destino = _spec(destino, rel_destino)
         if rel_destino in existentes:
             if existentes[rel_destino]["tamanho"] == info["tamanho"]:
