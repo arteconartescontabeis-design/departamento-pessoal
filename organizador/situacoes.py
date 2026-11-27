@@ -175,11 +175,15 @@ def executar_envio_item(graph, item):
 
 def analisar_comparacao(graph, pasta_a, pasta_b, direcao="ambas", conferir_conteudo=True,
                         cancelado=None, progresso=None):
+    # quando a cópia é só numa direção, a pasta de destino pode ainda não
+    # existir: ela é criada na execução (a pasta de ORIGEM precisa existir)
     _info(progresso, fase="varrendo a pasta A")
-    va, _ = varrer_qualquer(graph, pasta_a, cancelado=cancelado, progresso=progresso)
+    va, _ = varrer_qualquer(graph, pasta_a, vazio_se_faltar=(direcao == "b_para_a"),
+                            cancelado=cancelado, progresso=progresso)
     print(f"[análise] pasta A varrida: {len(va)} arquivos", flush=True)
     _info(progresso, fase="varrendo a pasta B")
-    vb, _ = varrer_qualquer(graph, pasta_b, cancelado=cancelado, progresso=progresso)
+    vb, _ = varrer_qualquer(graph, pasta_b, vazio_se_faltar=(direcao == "a_para_b"),
+                            cancelado=cancelado, progresso=progresso)
     print(f"[análise] pasta B varrida: {len(vb)} arquivos — comparando...", flush=True)
     pares = sum(1 for r, i in va.items()
                 if r in vb and vb[r]["tamanho"] == i["tamanho"]) if conferir_conteudo else 0
@@ -235,6 +239,10 @@ def analisar_comparacao(graph, pasta_a, pasta_b, direcao="ambas", conferir_conte
         "faltando_copiar": sum(1 for i in itens if i["acao"] == "copiar"),
         "atencao": sum(1 for i in itens if i["acao"] == "atencao"),
     }
+    if direcao == "b_para_a" and not va:
+        resumo["observacao"] = "a pasta A ainda não existe — será criada na execução"
+    elif direcao == "a_para_b" and not vb:
+        resumo["observacao"] = "a pasta B ainda não existe — será criada na execução"
     return resumo, itens
 
 

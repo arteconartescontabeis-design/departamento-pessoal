@@ -137,6 +137,16 @@ def test_notas_local(tmp_path):
     assert copiar[1].endswith("destino/2026/05/recente.pdf")
 
 
+def test_comparacao_destino_inexistente_em_direcao_unica(tmp_path):
+    a, b = tmp_path / "nao_existe", tmp_path / "b"
+    _criar(b, "x.txt", b"abc")
+    resumo, itens = situacoes.analisar_comparacao(None, str(a), str(b), "b_para_a")
+    assert resumo["faltando_copiar"] == 1
+    assert "será criada" in resumo["observacao"]
+    with pytest.raises(ValueError, match="não encontrada"):
+        situacoes.analisar_comparacao(None, str(a), str(b), "ambas")
+
+
 def test_cancelamento_interrompe_analise(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
     _criar(a, "x.txt", b"1")
