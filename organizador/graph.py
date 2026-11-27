@@ -255,8 +255,17 @@ class Graph:
         with open(caminho_local, "rb") as f:
             while enviado < tamanho:
                 dados = f.read(_PEDACO_ENVIO)
-                r = requests.put(url, data=dados, timeout=900, headers={
-                    "Content-Range": f"bytes {enviado}-{enviado + len(dados) - 1}/{tamanho}"})
+                cab = {"Content-Range": f"bytes {enviado}-{enviado + len(dados) - 1}/{tamanho}"}
+                for tentativa in range(5):
+                    r = requests.put(url, data=dados, timeout=900, headers=cab)
+                    if r.status_code in (429, 502, 503, 504):
+                        try:
+                            espera = int(r.headers.get("Retry-After", "3"))
+                        except ValueError:
+                            espera = 3
+                        time.sleep(max(espera, 1))
+                        continue
+                    break
                 if r.status_code not in (200, 201, 202):
                     raise self._erro(r, f"Falha no envio de /{destino} (byte {enviado})")
                 enviado += len(dados)

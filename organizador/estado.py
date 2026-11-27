@@ -48,7 +48,7 @@ class Estado:
             c.executescript(_ESQUEMA)
 
     def _con(self):
-        c = sqlite3.connect(self._arquivo)
+        c = sqlite3.connect(self._arquivo, timeout=30)
         c.row_factory = sqlite3.Row
         return c
 

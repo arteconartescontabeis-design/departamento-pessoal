@@ -2,6 +2,7 @@
   "client_id": "COLE-AQUI-O-ID-DO-APLICATIVO-REGISTRADO-NO-ENTRA",
   "tenant": "artecon.cnt.br",
   "porta": 8765,
+  "transferencias_paralelas": 8,
   "envio": {
     "pasta_local": "F:\\Artecon Recibo\\RESTORE",
     "pasta_onedrive": "Artecon Recibo/RESTORE",

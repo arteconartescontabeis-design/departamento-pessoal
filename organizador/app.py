@@ -7,6 +7,7 @@ botão Aprovar no painel; nada é apagado nem sobrescrito, nunca.
 import json
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -22,6 +23,7 @@ PADRAO = {
     "client_id": "",
     "tenant": "organizations",
     "porta": 8765,
+    "transferencias_paralelas": 8,
     "envio": {"pasta_local": "F:\\Artecon Recibo\\RESTORE",
               "pasta_onedrive": "Artecon Recibo/RESTORE",
               "conferir_conteudo": True},
@@ -145,15 +147,14 @@ def _execucao(rid, evento):
     rel = db.obter(rid)
     plano = [i for i in rel["itens"]
              if i["status"] == "planejado" and i["acao"] in ("enviar", "copiar")]
-    erros = 0
+    paralelo = max(1, min(16, int(config.get("transferencias_paralelas", 8))))
     inicio = time.time()
-    cancelada = False
-    for n, item in enumerate(plano):
+    trava = threading.Lock()
+    contagem = {"feitos": 0, "erros": 0}
+
+    def um_item(item):
         if evento.is_set():
-            cancelada = True
-            break
-        andamentos[rid] = {"fase": "executando as cópias/envios", "feitos": n,
-                           "total": len(plano), "inicio_fase": inicio}
+            return
         try:
             if item["acao"] == "enviar":
                 situacoes.executar_envio_item(nuvem, item)
@@ -161,12 +162,24 @@ def _execucao(rid, evento):
                 situacoes.copiar_item(nuvem, item["origem"], item["destino"])
             db.atualizar_item(item["id"], "ok")
         except Exception as e:
-            erros += 1
+            with trava:
+                contagem["erros"] += 1
             db.atualizar_item(item["id"], "erro", e)
-    if cancelada:
+        finally:
+            with trava:
+                contagem["feitos"] += 1
+                andamentos[rid] = {
+                    "fase": f"executando as cópias/envios ({paralelo} em paralelo)",
+                    "feitos": contagem["feitos"], "total": len(plano),
+                    "inicio_fase": inicio}
+
+    with ThreadPoolExecutor(max_workers=paralelo) as executor:
+        list(executor.map(um_item, plano))
+
+    if evento.is_set():
         db.cancelar_registro(rid)
     else:
-        db.concluir_execucao(rid, erros)
+        db.concluir_execucao(rid, contagem["erros"])
     cancelamentos.pop(rid, None)
     andamentos.pop(rid, None)
 
