@@ -16,7 +16,7 @@ import estado as estado_mod
 import graph as graph_mod
 import situacoes
 
-VERSAO = "0.6.4"
+VERSAO = "0.7.0"
 
 AQUI = Path(__file__).resolve().parent
 PASTA_DADOS = AQUI / "dados"
@@ -94,7 +94,7 @@ cancelamentos = {}
 andamentos = {}
 
 
-def _analise(rid, situacao, params, evento):
+def _analise(rid, situacao, params, evento, auto_executar=False):
     def checar():
         if evento.is_set():
             raise situacoes.AnaliseCancelada()
@@ -131,6 +131,9 @@ def _analise(rid, situacao, params, evento):
         else:
             raise ValueError("situação desconhecida: " + situacao)
         db.concluir_analise(rid, resumo, itens)
+        if auto_executar and not evento.is_set() and db.aprovar(rid):
+            _execucao(rid, evento)
+            return
     except situacoes.AnaliseCancelada:
         db.cancelar_registro(rid)
     except Exception as e:
@@ -156,7 +159,10 @@ def api_analisar():
     rid = db.novo_relatorio(situacao, params)
     evento = threading.Event()
     cancelamentos[rid] = evento
-    threading.Thread(target=_analise, args=(rid, situacao, params, evento), daemon=True).start()
+    threading.Thread(target=_analise,
+                     args=(rid, situacao, params, evento,
+                           bool(corpo.get("auto_executar"))),
+                     daemon=True).start()
     return jsonify({"relatorio": rid})
 
 

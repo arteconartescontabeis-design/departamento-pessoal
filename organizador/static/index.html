@@ -66,6 +66,8 @@
     </div>
     <label style="font-weight:400"><input type="checkbox" id="envio-conteudo" checked>
       Conferir também o conteúdo (hash) dos arquivos que já existem nos dois lados</label>
+    <label style="font-weight:400"><input type="checkbox" id="auto-envio">
+      Executar automaticamente após a análise (sem segunda confirmação)</label>
     <button class="botao" onclick="analisar('envio')">Analisar (só leitura)</button>
   </section>
 
@@ -89,6 +91,8 @@
       <div><label style="font-weight:400; margin-top:28px"><input type="checkbox" id="comp-conteudo" checked>
         Conferir conteúdo (hash) quando o arquivo existe nas duas</label></div>
     </div>
+    <label style="font-weight:400"><input type="checkbox" id="auto-comparacao">
+      Executar automaticamente após a análise (sem segunda confirmação)</label>
     <button class="botao" onclick="analisar('comparacao')">Analisar (só leitura)</button>
   </section>
 
@@ -108,6 +112,8 @@
     <label style="font-weight:400"><input type="checkbox" id="notas-conferir" checked>
       Ler a data de emissão <b>dentro</b> de cada nota (XML/PDF) e conferir com a pasta — divergência vira
       "atenção", nunca é copiada no palpite</label>
+    <label style="font-weight:400"><input type="checkbox" id="auto-notas">
+      Executar automaticamente após a análise (sem segunda confirmação)</label>
     <button class="botao" onclick="analisar('notas')">Analisar (só leitura)</button>
   </section>
 
@@ -208,9 +214,14 @@ function parametros(situacao){
 }
 
 async function analisar(situacao){
+  const auto = !!document.getElementById("auto-"+situacao)?.checked;
+  if(auto && !confirm("Modo automático: terminada a análise, as cópias/envios serão executados " +
+      "SEM nova confirmação. Itens de atenção e revisão manual continuam retidos, e nada é " +
+      "apagado nem sobrescrito. Confirmar o início?")) return;
   try{
-    const r = await api("/api/analisar", {situacao, params: parametros(situacao)});
-    msg("Análise iniciada — acompanhe na aba Relatórios.");
+    const r = await api("/api/analisar", {situacao, params: parametros(situacao), auto_executar: auto});
+    msg(auto ? "Análise iniciada em modo automático — acompanhe na aba Relatórios."
+             : "Análise iniciada — acompanhe na aba Relatórios.");
     detalheAberto = r.relatorio;
     document.querySelector('[data-aba="relatorios"]').click();
   }catch(err){ msg(err.message, 8000); }
