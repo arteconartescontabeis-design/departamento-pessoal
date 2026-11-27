@@ -61,7 +61,10 @@
     nada: ela gera um relatório, e o envio só acontece depois da sua aprovação. Depois de enviar, cada arquivo é
     conferido na nuvem (tamanho e hash).</p>
     <div class="linha">
-      <div><label>Pasta local (origem)</label><input type="text" id="envio-local"></div>
+      <div><label>Pasta(s) local(is) — uma por linha</label>
+        <textarea id="envio-local" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--borda);border-radius:6px;font-size:14px;font-family:inherit"></textarea>
+        <div class="mini">Uma pasta: o conteúdo vai direto para o destino. Várias pastas: cada uma vira
+        uma subpasta do destino com o próprio nome.</div></div>
       <div><label>Pasta no OneDrive (destino)</label><input type="text" id="envio-nuvem"></div>
     </div>
     <label style="font-weight:400"><input type="checkbox" id="envio-conteudo" checked>

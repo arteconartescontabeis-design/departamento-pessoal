@@ -16,7 +16,7 @@ import estado as estado_mod
 import graph as graph_mod
 import situacoes
 
-VERSAO = "0.9.0"
+VERSAO = "0.9.1"
 
 AQUI = Path(__file__).resolve().parent
 PASTA_DADOS = AQUI / "dados"
@@ -104,10 +104,17 @@ def _analise(rid, situacao, params, evento, auto_executar=False):
 
     try:
         if situacao == "envio":
-            resumo, itens = situacoes.analisar_envio(
-                nuvem, params["pasta_local"], params["pasta_onedrive"],
-                bool(params.get("conferir_conteudo", True)),
-                cancelado=checar, progresso=informar)
+            linhas = [l.strip() for l in (params["pasta_local"] or "").splitlines() if l.strip()]
+            if len(linhas) > 1:
+                resumo, itens = situacoes.analisar_envio_varias(
+                    nuvem, linhas, params["pasta_onedrive"],
+                    bool(params.get("conferir_conteudo", True)),
+                    cancelado=checar, progresso=informar)
+            else:
+                resumo, itens = situacoes.analisar_envio(
+                    nuvem, linhas[0], params["pasta_onedrive"],
+                    bool(params.get("conferir_conteudo", True)),
+                    cancelado=checar, progresso=informar)
         elif situacao == "comparacao":
             resumo, itens = situacoes.analisar_comparacao(
                 nuvem, params["pasta_a"], params["pasta_b"],

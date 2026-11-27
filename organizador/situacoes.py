@@ -160,6 +160,38 @@ def analisar_envio(graph, pasta_local, pasta_onedrive, conferir_conteudo=True,
     return resumo, itens
 
 
+def analisar_envio_varias(graph, pastas_locais, base_onedrive, conferir_conteudo=True,
+                          cancelado=None, progresso=None):
+    """Várias pastas locais de uma vez: cada uma vira uma subpasta da base
+    no OneDrive, com o nome da própria pasta."""
+    _t, base = classificar(base_onedrive)
+    if _t == "local":
+        base = base_onedrive.replace("\\", "/").strip("/")
+    todos = []
+    por_pasta = []
+    totais = {"a_enviar": 0, "ja_enviados_e_conferidos": 0, "atencao": 0,
+              "arquivos_nas_pastas_locais": 0, "somente_na_nuvem": 0}
+    pastas = [p.strip().strip('"') for p in pastas_locais if p.strip().strip('"')]
+    for pasta in pastas:
+        nome = os.path.basename(pasta.rstrip("\\/"))
+        destino = "onedrive:/" + (base + "/" + nome).strip("/")
+        _info(progresso, fase=f"analisando a pasta {nome}")
+        r, its = analisar_envio(graph, pasta, destino, conferir_conteudo,
+                                cancelado=cancelado, progresso=progresso)
+        todos += its
+        totais["a_enviar"] += r["a_enviar"]
+        totais["ja_enviados_e_conferidos"] += r["ja_enviados_e_conferidos"]
+        totais["atencao"] += r["atencao"]
+        totais["arquivos_nas_pastas_locais"] += r["arquivos_na_pasta_local"]
+        totais["somente_na_nuvem"] += r["somente_na_nuvem"]
+        por_pasta.append(f"{nome}: {r['a_enviar']} a enviar, "
+                         f"{r['ja_enviados_e_conferidos']} já na nuvem")
+    resumo = {"pastas_locais": len(pastas), "base_no_onedrive": "/" + base}
+    resumo.update(totais)
+    resumo["por_pasta"] = " · ".join(por_pasta)
+    return resumo, todos
+
+
 def executar_envio_item(graph, item):
     hash_local = quickxor.hash_arquivo(item["origem"])
     _tipo, destino = classificar(item["destino"])

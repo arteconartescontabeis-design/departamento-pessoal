@@ -147,6 +147,38 @@ def test_comparacao_destino_inexistente_em_direcao_unica(tmp_path):
         situacoes.analisar_comparacao(None, str(a), str(b), "ambas")
 
 
+class _NuvemFalsa:
+    """OneDrive de mentira para os testes: pastas pedidas -> arquivos."""
+
+    def __init__(self, pastas):
+        self._pastas = pastas
+
+    def varrer(self, caminho, cancelado=None, progresso=None):
+        caminho = caminho.strip("/")
+        if caminho not in self._pastas:
+            raise RuntimeError(f"Pasta não encontrada no OneDrive: /{caminho}")
+        return self._pastas[caminho]
+
+
+def test_envio_varias_pastas(tmp_path):
+    a, b = tmp_path / "Ap Maquinas", tmp_path / "Odorizzi"
+    _criar(a, "2024/n1.xml", b"aa")
+    _criar(a, "2024/n2.xml", b"bb")
+    _criar(b, "2023/n3.xml", b"cc")
+    nuvem = _NuvemFalsa({
+        "Notas 6 Anos/Ap Maquinas": {"2024/n1.xml": {"tamanho": 2, "hash": None}},
+    })
+    resumo, itens = situacoes.analisar_envio_varias(
+        nuvem, [str(a), str(b)], "Notas 6 Anos", conferir_conteudo=False)
+    assert resumo["pastas_locais"] == 2
+    assert resumo["a_enviar"] == 2
+    assert resumo["ja_enviados_e_conferidos"] == 1
+    destinos = sorted(i["destino"] for i in itens if i["acao"] == "enviar")
+    assert destinos[0] == "onedrive:/Notas 6 Anos/Ap Maquinas/2024/n2.xml"
+    assert destinos[1] == "onedrive:/Notas 6 Anos/Odorizzi/2023/n3.xml"
+    assert "Ap Maquinas: 1 a enviar" in resumo["por_pasta"]
+
+
 def test_cancelamento_interrompe_analise(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
     _criar(a, "x.txt", b"1")
