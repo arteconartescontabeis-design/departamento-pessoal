@@ -16,7 +16,7 @@ import estado as estado_mod
 import graph as graph_mod
 import situacoes
 
-VERSAO = "0.4.1"
+VERSAO = "0.4.2"
 
 AQUI = Path(__file__).resolve().parent
 PASTA_DADOS = AQUI / "dados"
@@ -151,7 +151,9 @@ def _execucao(rid, evento):
     rel = db.obter(rid)
     plano = [i for i in rel["itens"]
              if i["status"] == "planejado" and i["acao"] in ("enviar", "copiar")]
-    paralelo = max(1, min(16, int(config.get("transferencias_paralelas", 8))))
+    # acima de ~20 a Microsoft costuma frear (429); o app re-tenta sozinho,
+    # mas o ganho real tende a sumir — meça antes de subir mais
+    paralelo = max(1, min(64, int(config.get("transferencias_paralelas", 8))))
     inicio = time.time()
     trava = threading.Lock()
     contagem = {"feitos": 0, "erros": 0}
