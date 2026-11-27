@@ -196,8 +196,9 @@ def test_notas_conferindo_o_arquivo(tmp_path):
     por_destino = {i["destino"].replace("\\", "/"): i for i in itens if i["acao"] == "copiar"}
     divergente = next(v for k, v in por_destino.items() if k.endswith("destino/2022/07/divergente.xml"))
     assert "05/2023" in divergente["detalhe"] and "pela pasta" in divergente["detalhe"]
+    # "diversos" vem antes do período no caminho -> fica antes do ano/mês
     resgatada = next(v for k, v in por_destino.items()
-                     if k.endswith("destino/2023/05/diversos/resgatada.xml"))
+                     if k.endswith("destino/diversos/2023/05/resgatada.xml"))
     assert "emissão lida na nota" in resgatada["detalhe"]
 
 
@@ -299,6 +300,21 @@ def test_notas_conflito_de_nomes(tmp_path):
     _criar(origem, "loja2/2024/03/nota.pdf", b"bbbb")
     resumo, itens = situacoes.analisar_notas(
         None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26))
-    # loja1/loja2 não são período: acompanham o arquivo, sem conflito
+    # loja1/loja2 vêm antes do período: viram prefixo (empresa -> ano -> mês)
     assert resumo["a_copiar"] == 2
     assert resumo["atencao"] == 0
+    destinos = sorted(i["destino"].replace("\\", "/") for i in itens)
+    assert destinos[0].endswith("destino/loja1/2024/03/nota.pdf")
+    assert destinos[1].endswith("destino/loja2/2024/03/nota.pdf")
+
+
+def test_estrutura_empresa_ano_mes_cancelada(tmp_path):
+    origem, destino = tmp_path / "origem", tmp_path / "destino"
+    destino.mkdir()
+    _criar(origem, "Ap Maquinas/2021/04/nota.xml", b"normal")
+    _criar(origem, "Ap Maquinas/2021/04/Cancelada/cancelada.xml", b"cancelada")
+    resumo, itens = situacoes.analisar_notas(
+        None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26))
+    destinos = sorted(i["destino"].replace("\\", "/") for i in itens)
+    assert destinos[0].endswith("destino/Ap Maquinas/2021/04/Cancelada/cancelada.xml")
+    assert destinos[1].endswith("destino/Ap Maquinas/2021/04/nota.xml")

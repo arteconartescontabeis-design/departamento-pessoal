@@ -502,10 +502,16 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
             fora_do_periodo += 1
             continue
         sub = formato.format(ano=ano, mes=mes, mes_nome=MESES_NOMES[mes])
-        # subpastas que não são período (Cancelada, Inutilizada, nome da loja...)
-        # acompanham o arquivo no destino — nada colide, nada se perde
-        extras = [c for c in partes[:-1] if ano_mes_do_texto(c) == (None, None)]
-        rel_destino = "/".join([sub.strip("/")] + extras + [partes[-1]])
+        # a posição das subpastas é respeitada: o que vem ANTES do período
+        # (a empresa) fica antes do ano/mês; o que vem DEPOIS (Cancelada,
+        # Importados...) fica dentro do mês — nada colide, nada se perde
+        pastas = partes[:-1]
+        indices_periodo = [i for i, c in enumerate(pastas)
+                           if ano_mes_do_texto(c) != (None, None)]
+        corte_prefixo = indices_periodo[0] if indices_periodo else len(pastas)
+        prefixo = pastas[:corte_prefixo]
+        extras = [c for c in pastas[corte_prefixo:] if ano_mes_do_texto(c) == (None, None)]
+        rel_destino = "/".join(prefixo + [sub.strip("/")] + extras + [partes[-1]])
         # cada origem que aponta para o mesmo destino ganha a sua vaga, em ordem:
         # a 1ª fica com o nome original, a 2ª com " (2)", e assim por diante —
         # nota fiscal não se descarta, nem em duplicidade
