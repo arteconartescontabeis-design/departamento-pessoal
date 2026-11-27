@@ -305,6 +305,41 @@ def ano_mes_do_texto(texto):
     return ano, mes
 
 
+def data_da_nota(caminho):
+    """Lê a data de emissão dentro da própria nota: XML (NF-e, campo dhEmi/dEmi)
+    ou PDF com texto (procura a data junto de 'emissão'). -> (ano, mes) ou None."""
+    nome = str(caminho).lower()
+    try:
+        if nome.endswith(".xml"):
+            import xml.etree.ElementTree as ET
+            raiz = ET.parse(caminho).getroot()
+            for el in raiz.iter():
+                tag = el.tag.rsplit("}", 1)[-1].lower()
+                if tag in ("dhemi", "demi", "dtemissao", "dataemissao") and el.text:
+                    m = re.search(r"(20\d{2})-(0[1-9]|1[0-2])", el.text)
+                    if m:
+                        return int(m.group(1)), int(m.group(2))
+            return None
+        if nome.endswith(".pdf"):
+            from pypdf import PdfReader
+            texto = ""
+            for pagina in PdfReader(caminho).pages[:2]:
+                texto += (pagina.extract_text() or "") + "\n"
+            t = _normalizar(texto)
+            m = re.search(r"emiss[a-z]*\W{0,60}?([0-3]\d)[/. -]([01]\d)[/. -](20\d{2})", t, re.S)
+            if m and 1 <= int(m.group(2)) <= 12:
+                return int(m.group(3)), int(m.group(2))
+            m = re.search(r"(20\d{2})-(0[1-9]|1[0-2])-[0-3]\d", t)
+            if m:
+                return int(m.group(1)), int(m.group(2))
+            m = re.search(r"\b([0-3]\d)/([01]\d)/(20\d{2})\b", t)
+            if m and 1 <= int(m.group(2)) <= 12:
+                return int(m.group(3)), int(m.group(2))
+    except Exception:
+        return None
+    return None
+
+
 def periodo_do_caminho(componentes):
     """Combina as pastas do caminho, da mais interna para a mais externa
     (ex.: ['2023', '05 - Maio'] -> (2023, 5))."""
@@ -321,9 +356,13 @@ def periodo_do_caminho(componentes):
 
 
 def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", hoje=None,
-                   cancelado=None, progresso=None):
+                   cancelado=None, progresso=None, conferir_arquivo=False):
     hoje = hoje or date.today()
     corte = (hoje.year - int(anos), hoje.month)
+    tipo_origem, _co = classificar(origem)
+    if conferir_arquivo and tipo_origem == "nuvem":
+        raise ValueError("a conferência da data dentro da nota exige pasta de ORIGEM local "
+                         "(ler cada nota da nuvem baixaria todos os arquivos)")
     _info(progresso, fase="varrendo a pasta de origem")
     arquivos, _ = varrer_qualquer(graph, origem, cancelado=cancelado, progresso=progresso)
     _info(progresso, fase="varrendo a pasta de destino")
@@ -332,24 +371,38 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
 
     inicio_fase = time.time()
     itens = []
-    fora_do_periodo = ja_no_destino = feitos = 0
+    fora_do_periodo = ja_no_destino = feitos = lidas_na_nota = divergentes = 0
     planejados = set()
+    passo = 100 if conferir_arquivo else 500
     for rel, info in sorted(arquivos.items()):
         if cancelado:
             cancelado()
         feitos += 1
-        if feitos % 500 == 0:
-            _info(progresso, fase="classificando as notas", feitos=feitos,
-                  total=len(arquivos), inicio_fase=inicio_fase)
+        if feitos % passo == 0:
+            _info(progresso, fase="classificando as notas" +
+                  (" (lendo a emissão em cada uma)" if conferir_arquivo else ""),
+                  feitos=feitos, total=len(arquivos), inicio_fase=inicio_fase)
         partes = rel.split("/")
-        periodo = periodo_do_caminho(partes[:-1])
-        if not periodo:
+        periodo_pasta = periodo_do_caminho(partes[:-1])
+        if not periodo_pasta:
             a, m = ano_mes_do_texto(partes[-1])
-            periodo = (a, m) if a and m else None
+            periodo_pasta = (a, m) if a and m else None
         spec_origem = _spec(origem, rel)
+        periodo_nota = data_da_nota(spec_origem) if conferir_arquivo else None
+        if periodo_nota:
+            lidas_na_nota += 1
+        if periodo_nota and periodo_pasta and periodo_nota != periodo_pasta:
+            divergentes += 1
+            itens.append({"acao": "atencao", "origem": spec_origem, "tamanho": info["tamanho"],
+                          "detalhe": f"a pasta indica {periodo_pasta[1]:02d}/{periodo_pasta[0]}, "
+                                     f"mas a emissão dentro da nota é "
+                                     f"{periodo_nota[1]:02d}/{periodo_nota[0]} — revisar"})
+            continue
+        periodo = periodo_nota or periodo_pasta
         if not periodo:
+            onde = ("nem dentro da nota nem no caminho" if conferir_arquivo else "no caminho")
             itens.append({"acao": "manual", "origem": spec_origem, "tamanho": info["tamanho"],
-                          "detalhe": "período (mês/ano) não identificado no caminho"})
+                          "detalhe": f"período (mês/ano) não identificado {onde}"})
             continue
         ano, mes = periodo
         if (ano, mes) < corte:
@@ -372,8 +425,11 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
                           "detalhe": "duas notas de origens diferentes cairiam no mesmo destino — revisar"})
             continue
         planejados.add(rel_destino)
+        base_periodo = "emissão lida na nota" if periodo_nota else "pela pasta"
         itens.append({"acao": "copiar", "origem": spec_origem, "destino": spec_destino,
-                      "tamanho": info["tamanho"], "detalhe": f"{mes:02d}/{ano}"})
+                      "tamanho": info["tamanho"],
+                      "detalhe": f"{mes:02d}/{ano} — {base_periodo}"
+                                 if conferir_arquivo else f"{mes:02d}/{ano}"})
 
     resumo = {
         "origem": origem, "destino": destino, "anos": int(anos),
@@ -385,4 +441,7 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
         "sem_periodo_identificado": sum(1 for i in itens if i["acao"] == "manual"),
         "atencao": sum(1 for i in itens if i["acao"] == "atencao"),
     }
+    if conferir_arquivo:
+        resumo["emissao_lida_dentro_da_nota"] = lidas_na_nota
+        resumo["divergencias_pasta_x_nota"] = divergentes
     return resumo, itens

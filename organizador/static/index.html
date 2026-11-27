@@ -105,6 +105,9 @@
       <div><label>Formato das subpastas de destino</label><input type="text" id="notas-formato" value="{ano}/{mes:02d}">
         <div class="mini">Ex.: <code>{ano}/{mes:02d}</code> → 2023/05 · <code>{ano}/{mes:02d} - {mes_nome}</code> → 2023/05 - Maio</div></div>
     </div>
+    <label style="font-weight:400"><input type="checkbox" id="notas-conferir" checked>
+      Ler a data de emissão <b>dentro</b> de cada nota (XML/PDF) e conferir com a pasta — divergência vira
+      "atenção", nunca é copiada no palpite</label>
     <button class="botao" onclick="analisar('notas')">Analisar (só leitura)</button>
   </section>
 
@@ -200,7 +203,8 @@ function parametros(situacao){
     origem: document.getElementById("notas-origem").value.trim(),
     destino: document.getElementById("notas-destino").value.trim(),
     anos: document.getElementById("notas-anos").value,
-    formato_destino: document.getElementById("notas-formato").value.trim()};
+    formato_destino: document.getElementById("notas-formato").value.trim(),
+    conferir_arquivo: document.getElementById("notas-conferir").checked};
 }
 
 async function analisar(situacao){

@@ -16,7 +16,7 @@ import estado as estado_mod
 import graph as graph_mod
 import situacoes
 
-VERSAO = "0.4.2"
+VERSAO = "0.5.0"
 
 AQUI = Path(__file__).resolve().parent
 PASTA_DADOS = AQUI / "dados"
@@ -114,7 +114,8 @@ def _analise(rid, situacao, params, evento):
                 nuvem, params["origem"], params["destino"],
                 int(params.get("anos", 6)),
                 params.get("formato_destino") or "{ano}/{mes:02d}",
-                cancelado=checar, progresso=informar)
+                cancelado=checar, progresso=informar,
+                conferir_arquivo=bool(params.get("conferir_arquivo", False)))
         else:
             raise ValueError("situação desconhecida: " + situacao)
         db.concluir_analise(rid, resumo, itens)

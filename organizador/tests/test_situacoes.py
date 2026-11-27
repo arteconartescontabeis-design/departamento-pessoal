@@ -159,6 +159,52 @@ def test_cancelamento_interrompe_analise(tmp_path):
         situacoes.analisar_comparacao(None, str(a), str(b), cancelado=cancelar)
 
 
+_XML_NFE = """<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe">
+  <NFe><infNFe><ide><dhEmi>2023-05-12T10:30:00-03:00</dhEmi></ide></infNFe></NFe>
+</nfeProc>"""
+
+
+def test_data_da_nota_xml(tmp_path):
+    p = tmp_path / "nfe.xml"
+    p.write_text(_XML_NFE, encoding="utf-8")
+    assert situacoes.data_da_nota(p) == (2023, 5)
+    sem_data = tmp_path / "outro.xml"
+    sem_data.write_text("<a><b>nada</b></a>", encoding="utf-8")
+    assert situacoes.data_da_nota(sem_data) is None
+
+
+def test_notas_conferindo_o_arquivo(tmp_path):
+    origem, destino = tmp_path / "origem", tmp_path / "destino"
+    destino.mkdir()
+    # pasta diz 2022/07, mas a emissão dentro do XML é 05/2023 -> atenção
+    _criar(origem, "2022/07/divergente.xml", _XML_NFE.encode())
+    # sem período na pasta, mas a nota revela 05/2023 -> copiar para 2023/05
+    _criar(origem, "diversos/resgatada.xml", _XML_NFE.encode())
+    # sem período em lugar nenhum -> manual
+    _criar(origem, "diversos/misterio.pdf", b"%PDF-1.4 vazio")
+
+    resumo, itens = situacoes.analisar_notas(
+        None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26),
+        conferir_arquivo=True)
+
+    assert resumo["divergencias_pasta_x_nota"] == 1
+    assert resumo["emissao_lida_dentro_da_nota"] == 2
+    assert resumo["a_copiar"] == 1
+    assert resumo["sem_periodo_identificado"] == 1
+    copiar = [i for i in itens if i["acao"] == "copiar"][0]
+    assert copiar["destino"].replace("\\", "/").endswith("destino/2023/05/resgatada.xml")
+    assert "emissão lida na nota" in copiar["detalhe"]
+    atencao = [i for i in itens if i["acao"] == "atencao"][0]
+    assert "07/2022" in atencao["detalhe"] and "05/2023" in atencao["detalhe"]
+
+
+def test_notas_conferir_arquivo_exige_origem_local():
+    with pytest.raises(ValueError, match="ORIGEM local"):
+        situacoes.analisar_notas(None, "onedrive:/Notas", "C:\\destino",
+                                 conferir_arquivo=True)
+
+
 def test_notas_conflito_de_nomes(tmp_path):
     origem, destino = tmp_path / "origem", tmp_path / "destino"
     _criar(origem, "loja1/2024/03/nota.pdf", b"aaa")
