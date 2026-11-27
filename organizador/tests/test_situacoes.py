@@ -257,13 +257,15 @@ def test_nome_repetido_duplicado_e_renomeado(tmp_path):
     _criar(origem, "Marco 2024/nota.pdf", b"conteudo DIFERENTE")
     resumo, itens = situacoes.analisar_notas(
         None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26))
-    assert resumo["a_copiar"] == 2
-    assert resumo["duplicados_identicos_ignorados"] == 1
+    # nota fiscal não se descarta: as três vão, duas com sufixo
+    assert resumo["a_copiar"] == 3
+    assert resumo["duplicados_identicos_copiados_com_sufixo"] == 1
     assert resumo["renomeados_por_nome_repetido"] == 1
     assert resumo["atencao"] == 0
     destinos = sorted(i["destino"].replace("\\", "/") for i in itens if i["acao"] == "copiar")
     assert destinos[0].endswith("destino/2024/03/nota (2).pdf")
-    assert destinos[1].endswith("destino/2024/03/nota.pdf")
+    assert destinos[1].endswith("destino/2024/03/nota (3).pdf")
+    assert destinos[2].endswith("destino/2024/03/nota.pdf")
 
 
 def test_notas_subpastas_da_empresa_acompanham(tmp_path):

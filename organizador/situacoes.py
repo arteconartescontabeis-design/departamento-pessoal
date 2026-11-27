@@ -456,7 +456,7 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
     itens = []
     fora_do_periodo = ja_no_destino = feitos = lidas_na_nota = divergentes = 0
     apoios_pela_pasta = duplicados = renomeados = 0
-    planejados = {}
+    ocupacoes = {}
     for rel, info in sorted(arquivos.items()):
         if cancelado:
             cancelado()
@@ -501,31 +501,37 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
         # acompanham o arquivo no destino — nada colide, nada se perde
         extras = [c for c in partes[:-1] if ano_mes_do_texto(c) == (None, None)]
         rel_destino = "/".join([sub.strip("/")] + extras + [partes[-1]])
-        if rel_destino in existentes and existentes[rel_destino]["tamanho"] == info["tamanho"]:
+        # cada origem que aponta para o mesmo destino ganha a sua vaga, em ordem:
+        # a 1ª fica com o nome original, a 2ª com " (2)", e assim por diante —
+        # nota fiscal não se descarta, nem em duplicidade
+        chave = rel_destino.casefold()
+        anteriores = ocupacoes.setdefault(chave, [])
+        vez = len(anteriores) + 1
+        base_rel = rel_destino
+        while True:
+            rel_tent = base_rel if vez == 1 else _com_sufixo(base_rel, vez)
+            ja = existentes.get(rel_tent)
+            if ja and ja["tamanho"] != info["tamanho"]:
+                vez += 1
+                continue
+            break
+        anteriores.append((spec_origem, info["tamanho"]))
+        if ja:  # a vaga desta origem já está preenchida no destino, mesmo tamanho
             ja_no_destino += 1
             continue
-        chave = rel_destino.casefold()
-        plan = planejados.get(chave)
-        if plan and plan[1] == info["tamanho"] and _conteudo_igual(plan[0], spec_origem):
-            duplicados += 1
-            itens.append({"acao": "informativo", "origem": spec_origem,
-                          "tamanho": info["tamanho"],
-                          "detalhe": "duplicado idêntico de arquivo já planejado — não é copiado de novo"})
-            continue
         observacao_nome = ""
-        if rel_destino in existentes or plan:
-            n = 2
-            while True:
-                candidato = _com_sufixo(rel_destino, n)
-                if candidato not in existentes and candidato.casefold() not in planejados:
-                    break
-                n += 1
-            observacao_nome = f' — nome repetido: vai como "{posixpath.basename(candidato)}"'
-            rel_destino = candidato
-            chave = rel_destino.casefold()
-            renomeados += 1
+        if vez > 1:
+            primeiro = anteriores[0]
+            identico = (primeiro[1] == info["tamanho"]
+                        and _conteudo_igual(primeiro[0], spec_origem))
+            rotulo = "duplicado idêntico" if identico else "nome repetido"
+            observacao_nome = f' — {rotulo}: vai como "{posixpath.basename(rel_tent)}"'
+            if identico:
+                duplicados += 1
+            else:
+                renomeados += 1
+        rel_destino = rel_tent
         spec_destino = _spec(destino, rel_destino)
-        planejados[chave] = (spec_origem, info["tamanho"])
         if e_apoio and periodo_pasta:
             base_periodo = "arquivo de apoio — acompanha a pasta"
         elif periodo_pasta:
@@ -555,7 +561,7 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
     if apoios_pela_pasta:
         resumo["arquivos_de_apoio_pela_pasta"] = apoios_pela_pasta
     if duplicados:
-        resumo["duplicados_identicos_ignorados"] = duplicados
+        resumo["duplicados_identicos_copiados_com_sufixo"] = duplicados
     if renomeados:
         resumo["renomeados_por_nome_repetido"] = renomeados
     return resumo, itens
