@@ -199,6 +199,23 @@ def test_notas_conferindo_o_arquivo(tmp_path):
     assert "07/2022" in atencao["detalhe"] and "05/2023" in atencao["detalhe"]
 
 
+def test_arquivo_de_apoio_acompanha_a_pasta(tmp_path):
+    origem, destino = tmp_path / "origem", tmp_path / "destino"
+    destino.mkdir()
+    # relatório dentro da pasta 2021/03, mas com data interna 05/2023:
+    # é apoio -> acompanha a pasta, sem virar divergência
+    _criar(origem, "2021/03/Relatorio_Reducao_Z.xml", _XML_NFE.encode())
+    resumo, itens = situacoes.analisar_notas(
+        None, str(origem), str(destino), anos=6, hoje=date(2026, 11, 26),
+        conferir_arquivo=True)
+    assert resumo["divergencias_pasta_x_nota"] == 0
+    assert resumo["arquivos_de_apoio_pela_pasta"] == 1
+    assert resumo["a_copiar"] == 1
+    item = itens[0]
+    assert item["destino"].replace("\\", "/").endswith("destino/2021/03/Relatorio_Reducao_Z.xml")
+    assert "acompanha a pasta" in item["detalhe"]
+
+
 def test_notas_cache_evita_reler(tmp_path):
     import estado as estado_mod
     origem, destino = tmp_path / "origem", tmp_path / "destino"

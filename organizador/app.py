@@ -16,7 +16,7 @@ import estado as estado_mod
 import graph as graph_mod
 import situacoes
 
-VERSAO = "0.6.3"
+VERSAO = "0.6.4"
 
 AQUI = Path(__file__).resolve().parent
 PASTA_DADOS = AQUI / "dados"
@@ -33,7 +33,9 @@ PADRAO = {
     "comparacao": {"pasta_a": "", "pasta_b": "", "direcao": "ambas",
                    "conferir_conteudo": True},
     "notas": {"origem": "", "destino": "", "anos": 6,
-              "formato_destino": "{ano}/{mes:02d}"},
+              "formato_destino": "{ano}/{mes:02d}",
+              "apoio_no_nome": ["relatorio", "resumo", "listagem", "totais",
+                                "movimento", "conferencia", "reducao"]},
 }
 
 
@@ -122,7 +124,8 @@ def _analise(rid, situacao, params, evento):
                     cancelado=checar, progresso=informar,
                     conferir_arquivo=bool(params.get("conferir_arquivo", False)),
                     cache_periodos=cache,
-                    leituras_paralelas=int(config.get("leituras_paralelas", 16)))
+                    leituras_paralelas=int(config.get("leituras_paralelas", 16)),
+                    palavras_apoio=config["notas"].get("apoio_no_nome"))
             finally:
                 cache.fechar()
         else:

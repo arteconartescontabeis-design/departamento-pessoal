@@ -408,9 +408,17 @@ def _ler_emissoes(origem, arquivos, cache, paralelo, cancelado, progresso):
     return periodos
 
 
+PALAVRAS_APOIO = ["relatorio", "resumo", "listagem", "totais", "movimento",
+                  "conferencia", "reducao"]
+
+
 def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", hoje=None,
                    cancelado=None, progresso=None, conferir_arquivo=False,
-                   cache_periodos=None, leituras_paralelas=16):
+                   cache_periodos=None, leituras_paralelas=16, palavras_apoio=None):
+    # arquivo de apoio (não é NF) acompanha a pasta da empresa em que está:
+    # o período vem da pasta e a data interna não conta como divergência
+    palavras_apoio = [_normalizar(p) for p in
+                      (PALAVRAS_APOIO if palavras_apoio is None else palavras_apoio) if p]
     hoje = hoje or date.today()
     corte = (hoje.year - int(anos), hoje.month)
     tipo_origem, _co = classificar(origem)
@@ -431,6 +439,7 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
     inicio_fase = time.time()
     itens = []
     fora_do_periodo = ja_no_destino = feitos = lidas_na_nota = divergentes = 0
+    apoios_pela_pasta = 0
     planejados = set()
     for rel, info in sorted(arquivos.items()):
         if cancelado:
@@ -449,6 +458,11 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
         periodo_nota = lido if isinstance(lido, tuple) else None
         if periodo_nota:
             lidas_na_nota += 1
+        nome_norm = _normalizar(partes[-1])
+        e_apoio = any(p in nome_norm for p in palavras_apoio)
+        if e_apoio and periodo_pasta:
+            periodo_nota = None
+            apoios_pela_pasta += 1
         if periodo_nota and periodo_pasta and periodo_nota != periodo_pasta:
             divergentes += 1
             itens.append({"acao": "atencao", "origem": spec_origem, "tamanho": info["tamanho"],
@@ -483,7 +497,10 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
                           "detalhe": "duas notas de origens diferentes cairiam no mesmo destino — revisar"})
             continue
         planejados.add(rel_destino)
-        base_periodo = "emissão lida na nota" if periodo_nota else "pela pasta"
+        if e_apoio and periodo_pasta:
+            base_periodo = "arquivo de apoio — acompanha a pasta"
+        else:
+            base_periodo = "emissão lida na nota" if periodo_nota else "pela pasta"
         itens.append({"acao": "copiar", "origem": spec_origem, "destino": spec_destino,
                       "tamanho": info["tamanho"],
                       "detalhe": f"{mes:02d}/{ano} — {base_periodo}"
@@ -502,4 +519,6 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
     if conferir_arquivo:
         resumo["emissao_lida_dentro_da_nota"] = lidas_na_nota
         resumo["divergencias_pasta_x_nota"] = divergentes
+    if apoios_pela_pasta:
+        resumo["arquivos_de_apoio_pela_pasta"] = apoios_pela_pasta
     return resumo, itens
