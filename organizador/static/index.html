@@ -43,7 +43,7 @@
 </head>
 <body>
 <header>
-  <h1>Organizador de Documentos — Departamento Pessoal</h1>
+  <h1>Organizador de Documentos — Departamento Pessoal <span id="versao" style="font-weight:400;font-size:13px;opacity:.8"></span></h1>
   <div id="usuario" class="mini" style="color:#dce6f5"></div>
 </header>
 <main>
@@ -147,6 +147,7 @@ document.querySelectorAll(".abas button").forEach(b => b.onclick = () => {
 
 async function carregarConfig(){
   const c = await api("/api/config");
+  if(c.versao) document.getElementById("versao").textContent = "v" + c.versao;
   document.getElementById("envio-local").value = c.envio.pasta_local || "";
   document.getElementById("envio-nuvem").value = c.envio.pasta_onedrive || "";
   document.getElementById("envio-conteudo").checked = c.envio.conferir_conteudo !== false;

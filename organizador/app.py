@@ -16,6 +16,8 @@ import estado as estado_mod
 import graph as graph_mod
 import situacoes
 
+VERSAO = "0.4.0"
+
 AQUI = Path(__file__).resolve().parent
 PASTA_DADOS = AQUI / "dados"
 
@@ -64,7 +66,9 @@ def pagina():
 
 @app.get("/api/config")
 def api_config():
-    return jsonify({k: config[k] for k in ("envio", "comparacao", "notas")})
+    resposta = {k: config[k] for k in ("envio", "comparacao", "notas")}
+    resposta["versao"] = VERSAO
+    return jsonify(resposta)
 
 
 @app.get("/api/login/estado")
@@ -231,6 +235,6 @@ def api_relatorio(rid):
 
 if __name__ == "__main__":
     porta = int(config.get("porta", 8765))
-    print(f"Organizador de Documentos — abra http://localhost:{porta}")
+    print(f"Organizador de Documentos v{VERSAO} — abra http://localhost:{porta}")
     # host 127.0.0.1: o painel só responde na própria máquina
     app.run(host="127.0.0.1", port=porta, threaded=True)
