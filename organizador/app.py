@@ -16,7 +16,7 @@ import estado as estado_mod
 import graph as graph_mod
 import situacoes
 
-VERSAO = "0.7.0"
+VERSAO = "0.7.1"
 
 AQUI = Path(__file__).resolve().parent
 PASTA_DADOS = AQUI / "dados"
@@ -237,6 +237,13 @@ def api_parar(rid):
 def api_descartar(rid):
     if not db.descartar(rid):
         return jsonify({"erro": "este relatório não está pendente de aprovação"}), 409
+    return jsonify({"ok": True})
+
+
+@app.post("/api/relatorio/<int:rid>/excluir")
+def api_excluir(rid):
+    if not db.excluir(rid):
+        return jsonify({"erro": "relatório em andamento (use Parar antes) ou inexistente"}), 409
     return jsonify({"ok": True})
 
 

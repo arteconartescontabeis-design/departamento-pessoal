@@ -146,6 +146,17 @@ class Estado:
             c.execute("update relatorios set status=?, executado_em=? where id=?",
                       (status, _agora(), rid))
 
+    def excluir(self, rid):
+        """Apaga o registro do relatório (histórico apenas; nenhum arquivo é
+        tocado). Em andamento não pode: primeiro Parar."""
+        with self._con() as c:
+            linha = c.execute("select status from relatorios where id=?", (rid,)).fetchone()
+            if not linha or linha["status"] in ("analisando", "executando"):
+                return False
+            c.execute("delete from itens where relatorio_id=?", (rid,))
+            c.execute("delete from relatorios where id=?", (rid,))
+            return True
+
     def listar_relatorios(self, limite=50):
         with self._con() as c:
             linhas = c.execute(

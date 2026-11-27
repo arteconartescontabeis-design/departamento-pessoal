@@ -238,6 +238,8 @@ async function carregarRelatorios(){
         extra = `<button class="botao secundario" style="margin:0 0 0 6px;padding:4px 12px" onclick="parar(${r.id})">⏹ parar</button>`;
       else if(r.status === "pendente")
         extra = `<button class="botao secundario" style="margin:0 0 0 6px;padding:4px 12px" onclick="descartar(${r.id})">descartar</button>`;
+      else
+        extra = `<button class="botao secundario" style="margin:0 0 0 6px;padding:4px 12px;color:var(--erro);border-color:var(--erro)" onclick="excluir(${r.id})">excluir</button>`;
       return `<tr><td>${r.id}</td><td>${esc(NOMES[r.situacao]||r.situacao)}</td>
       <td>${esc((r.criado_em||"").replace("T"," "))}</td>
       <td><span class="selo ${esc(r.status)}">${esc(r.status.replaceAll("_"," "))}</span></td>
@@ -312,6 +314,15 @@ async function parar(rid){
   if(!confirm(`Parar o relatório #${rid}? O que já foi feito fica registrado; nada é desfeito.`)) return;
   try{ await api(`/api/relatorio/${rid}/parar`, {}); msg("Pedido de parada enviado."); carregarRelatorios(); }
   catch(err){ msg(err.message, 8000); }
+}
+async function excluir(rid){
+  if(!confirm(`Excluir o relatório #${rid} do histórico? Nenhum arquivo copiado é afetado — só o registro some da lista.`)) return;
+  try{
+    await api(`/api/relatorio/${rid}/excluir`, {});
+    if(detalheAberto === rid){ detalheAberto = null; document.getElementById("detalhe").innerHTML = ""; }
+    msg("Relatório excluído do histórico.");
+    carregarRelatorios();
+  }catch(err){ msg(err.message, 8000); }
 }
 async function descartar(rid){
   try{ await api(`/api/relatorio/${rid}/descartar`, {}); msg("Relatório descartado. Nada foi alterado."); carregarRelatorios(); }
