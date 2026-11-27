@@ -15,6 +15,7 @@ import re
 import shutil
 import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 
@@ -74,7 +75,9 @@ def varrer_local(pasta, cancelado=None, progresso=None):
         _info(progresso, fase="varrendo a pasta local", arquivos=len(arquivos))
         for nome in nomes:
             p = Path(raiz) / nome
-            arquivos[p.relative_to(base).as_posix()] = {"tamanho": p.stat().st_size, "hash": None}
+            st = p.stat()
+            arquivos[p.relative_to(base).as_posix()] = {
+                "tamanho": st.st_size, "hash": None, "mtime": int(st.st_mtime)}
     return arquivos
 
 
@@ -355,8 +358,51 @@ def periodo_do_caminho(componentes):
     return None
 
 
+def _ler_emissoes(origem, arquivos, cache, paralelo, cancelado, progresso):
+    """Lê a emissão dentro das notas em paralelo, usando e alimentando o cache.
+    -> {rel: (ano, mes) | "sem"} — "sem" = já lida, sem data legível."""
+    periodos = {}
+    pendentes = []
+    for rel, info in arquivos.items():
+        spec = _spec(origem, rel)
+        guardado = cache.obter(spec, info["tamanho"], info.get("mtime")) if cache else None
+        if guardado is not None:
+            periodos[rel] = guardado
+        else:
+            pendentes.append((rel, spec, info))
+    if not pendentes:
+        return periodos
+    inicio = time.time()
+    feitos = 0
+    novos = []
+
+    def ler(trio):
+        rel, spec, info = trio
+        return rel, spec, info, data_da_nota(spec)
+
+    with ThreadPoolExecutor(max_workers=max(1, paralelo)) as executor:
+        for rel, spec, info, p in executor.map(ler, pendentes):
+            if cancelado:
+                cancelado()
+            periodos[rel] = p or "sem"
+            novos.append((spec, info["tamanho"], info.get("mtime") or 0,
+                          p[0] if p else 0, p[1] if p else 0))
+            feitos += 1
+            if feitos % 200 == 0:
+                _info(progresso, fase=f"lendo a emissão dentro das notas ({paralelo} em paralelo"
+                                      f", {len(periodos) - feitos} vindas da memória)",
+                      feitos=feitos, total=len(pendentes), inicio_fase=inicio)
+            if cache and len(novos) >= 2000:
+                cache.salvar_lote(novos)
+                novos = []
+    if cache and novos:
+        cache.salvar_lote(novos)
+    return periodos
+
+
 def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", hoje=None,
-                   cancelado=None, progresso=None, conferir_arquivo=False):
+                   cancelado=None, progresso=None, conferir_arquivo=False,
+                   cache_periodos=None, leituras_paralelas=16):
     hoje = hoje or date.today()
     corte = (hoje.year - int(anos), hoje.month)
     tipo_origem, _co = classificar(origem)
@@ -369,18 +415,21 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
     existentes, _ = varrer_qualquer(graph, destino, vazio_se_faltar=True,
                                     cancelado=cancelado, progresso=progresso)
 
+    emissoes = {}
+    if conferir_arquivo:
+        emissoes = _ler_emissoes(origem, arquivos, cache_periodos,
+                                 int(leituras_paralelas), cancelado, progresso)
+
     inicio_fase = time.time()
     itens = []
     fora_do_periodo = ja_no_destino = feitos = lidas_na_nota = divergentes = 0
     planejados = set()
-    passo = 100 if conferir_arquivo else 500
     for rel, info in sorted(arquivos.items()):
         if cancelado:
             cancelado()
         feitos += 1
-        if feitos % passo == 0:
-            _info(progresso, fase="classificando as notas" +
-                  (" (lendo a emissão em cada uma)" if conferir_arquivo else ""),
+        if feitos % 500 == 0:
+            _info(progresso, fase="classificando as notas",
                   feitos=feitos, total=len(arquivos), inicio_fase=inicio_fase)
         partes = rel.split("/")
         periodo_pasta = periodo_do_caminho(partes[:-1])
@@ -388,7 +437,8 @@ def analisar_notas(graph, origem, destino, anos=6, formato="{ano}/{mes:02d}", ho
             a, m = ano_mes_do_texto(partes[-1])
             periodo_pasta = (a, m) if a and m else None
         spec_origem = _spec(origem, rel)
-        periodo_nota = data_da_nota(spec_origem) if conferir_arquivo else None
+        lido = emissoes.get(rel)
+        periodo_nota = lido if isinstance(lido, tuple) else None
         if periodo_nota:
             lidas_na_nota += 1
         if periodo_nota and periodo_pasta and periodo_nota != periodo_pasta:

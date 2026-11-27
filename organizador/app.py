@@ -16,7 +16,7 @@ import estado as estado_mod
 import graph as graph_mod
 import situacoes
 
-VERSAO = "0.5.0"
+VERSAO = "0.6.0"
 
 AQUI = Path(__file__).resolve().parent
 PASTA_DADOS = AQUI / "dados"
@@ -26,6 +26,7 @@ PADRAO = {
     "tenant": "organizations",
     "porta": 8765,
     "transferencias_paralelas": 8,
+    "leituras_paralelas": 16,
     "envio": {"pasta_local": "F:\\Artecon Recibo\\RESTORE",
               "pasta_onedrive": "Artecon Recibo/RESTORE",
               "conferir_conteudo": True},
@@ -110,12 +111,18 @@ def _analise(rid, situacao, params, evento):
                 bool(params.get("conferir_conteudo", True)),
                 cancelado=checar, progresso=informar)
         elif situacao == "notas":
-            resumo, itens = situacoes.analisar_notas(
-                nuvem, params["origem"], params["destino"],
-                int(params.get("anos", 6)),
-                params.get("formato_destino") or "{ano}/{mes:02d}",
-                cancelado=checar, progresso=informar,
-                conferir_arquivo=bool(params.get("conferir_arquivo", False)))
+            cache = estado_mod.CachePeriodos(PASTA_DADOS / "cache_periodos.sqlite3")
+            try:
+                resumo, itens = situacoes.analisar_notas(
+                    nuvem, params["origem"], params["destino"],
+                    int(params.get("anos", 6)),
+                    params.get("formato_destino") or "{ano}/{mes:02d}",
+                    cancelado=checar, progresso=informar,
+                    conferir_arquivo=bool(params.get("conferir_arquivo", False)),
+                    cache_periodos=cache,
+                    leituras_paralelas=int(config.get("leituras_paralelas", 16)))
+            finally:
+                cache.fechar()
         else:
             raise ValueError("situação desconhecida: " + situacao)
         db.concluir_analise(rid, resumo, itens)

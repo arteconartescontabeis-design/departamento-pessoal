@@ -199,6 +199,29 @@ def test_notas_conferindo_o_arquivo(tmp_path):
     assert "07/2022" in atencao["detalhe"] and "05/2023" in atencao["detalhe"]
 
 
+def test_notas_cache_evita_reler(tmp_path):
+    import estado as estado_mod
+    origem, destino = tmp_path / "origem", tmp_path / "destino"
+    destino.mkdir()
+    _criar(origem, "diversos/nota.xml", _XML_NFE.encode())
+    arquivo = origem / "diversos" / "nota.xml"
+    tam, mt = arquivo.stat().st_size, int(arquivo.stat().st_mtime)
+    cache = estado_mod.CachePeriodos(tmp_path / "cache.sqlite3")
+    try:
+        r1, _ = situacoes.analisar_notas(None, str(origem), str(destino), anos=6,
+                                         hoje=date(2026, 11, 26), conferir_arquivo=True,
+                                         cache_periodos=cache)
+        assert r1["emissao_lida_dentro_da_nota"] == 1
+        # a leitura ficou guardada: a próxima análise responde pelo cache
+        assert cache.obter(str(arquivo), tam, mt) == (2023, 5)
+        r2, _ = situacoes.analisar_notas(None, str(origem), str(destino), anos=6,
+                                         hoje=date(2026, 11, 26), conferir_arquivo=True,
+                                         cache_periodos=cache)
+        assert r2["emissao_lida_dentro_da_nota"] == 1
+    finally:
+        cache.fechar()
+
+
 def test_notas_conferir_arquivo_exige_origem_local():
     with pytest.raises(ValueError, match="ORIGEM local"):
         situacoes.analisar_notas(None, "onedrive:/Notas", "C:\\destino",

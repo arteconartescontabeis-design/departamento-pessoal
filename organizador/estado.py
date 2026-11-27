@@ -40,6 +40,36 @@ def _agora():
     return datetime.now().isoformat(timespec="seconds")
 
 
+class CachePeriodos:
+    """Memória das emissões já lidas dentro das notas (arquivo + tamanho +
+    data de modificação -> ano/mês). Reanalisar só lê o que é novo ou mudou."""
+
+    def __init__(self, arquivo: Path):
+        Path(arquivo).parent.mkdir(parents=True, exist_ok=True)
+        self._con = sqlite3.connect(str(arquivo), timeout=60, check_same_thread=False)
+        self._con.execute(
+            "create table if not exists periodos_nota("
+            "caminho text primary key, tamanho integer, mtime integer, ano integer, mes integer)")
+        self._con.commit()
+
+    def obter(self, caminho, tamanho, mtime):
+        r = self._con.execute(
+            "select ano, mes from periodos_nota where caminho=? and tamanho=? and mtime=?",
+            (caminho, tamanho or 0, mtime or 0)).fetchone()
+        if r is None:
+            return None
+        return (r[0], r[1]) if r[0] else "sem"
+
+    def salvar_lote(self, linhas):
+        self._con.executemany(
+            "insert or replace into periodos_nota values(?,?,?,?,?)",
+            [(c, t or 0, m or 0, a, me) for c, t, m, a, me in linhas])
+        self._con.commit()
+
+    def fechar(self):
+        self._con.close()
+
+
 class Estado:
     def __init__(self, arquivo: Path):
         Path(arquivo).parent.mkdir(parents=True, exist_ok=True)
